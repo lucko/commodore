@@ -64,7 +64,14 @@ final class CommodoreImpl implements Commodore {
             GET_COMMAND_DISPATCHER_METHOD.setAccessible(true);
 
             Class<?> commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
-            GET_BRIGADIER_DISPATCHER_METHOD = commandDispatcher.getDeclaredMethod("a");
+            Method getBrigadierDispatcherMethod = null;
+            for (Method method : commandDispatcher.getDeclaredMethods()) {
+                if (method.getParameterCount() == 0 && CommandDispatcher.class.isAssignableFrom(method.getReturnType())) {
+                    getBrigadierDispatcherMethod = method;
+                    break;
+                }
+            }
+            GET_BRIGADIER_DISPATCHER_METHOD = Objects.requireNonNull(getBrigadierDispatcherMethod, "getBrigadierDispatcherMethod");
             GET_BRIGADIER_DISPATCHER_METHOD.setAccessible(true);
         } catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException e) {
             throw new ExceptionInInitializerError(e);
