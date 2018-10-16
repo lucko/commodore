@@ -78,6 +78,10 @@ final class CommodoreImpl implements Commodore {
         }
     }
 
+    static void ensureSetup() {
+        // do nothing - this is only called to trigger the static initializer
+    }
+
     private final Plugin plugin;
     private final Object lock = new Object();
 

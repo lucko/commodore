@@ -42,8 +42,9 @@ public final class CommodoreProvider {
     public static boolean isSupported() {
         try {
             Class.forName("com.mojang.brigadier.CommandDispatcher");
+            CommodoreImpl.ensureSetup();
             return true;
-        } catch (ClassNotFoundException e) {
+        } catch (Throwable e) {
             return false;
         }
     }
