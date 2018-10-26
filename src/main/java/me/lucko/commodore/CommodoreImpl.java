@@ -27,17 +27,24 @@ package me.lucko.commodore;
 
 import com.google.common.collect.Lists;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.Plugin;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -52,6 +59,12 @@ final class CommodoreImpl implements Commodore {
 
     // nms.CommandDispatcher#getDispatcher (obfuscated) method
     private static final Method GET_BRIGADIER_DISPATCHER_METHOD;
+
+    // obc.command.BukkitCommandWrapper constructor
+    private static final Constructor<?> COMMAND_WRAPPER_CONSTRUCTOR;
+
+    // ArgumentCommandNode#customSuggestions field
+    private static final Field CUSTOM_SUGGESTIONS_FIELD;
 
     static {
         try {
@@ -73,6 +86,12 @@ final class CommodoreImpl implements Commodore {
             }
             GET_BRIGADIER_DISPATCHER_METHOD = Objects.requireNonNull(getBrigadierDispatcherMethod, "getBrigadierDispatcherMethod");
             GET_BRIGADIER_DISPATCHER_METHOD.setAccessible(true);
+
+            Class<?> commandWrapperClass = ReflectionUtil.obcClass("command.BukkitCommandWrapper");
+            COMMAND_WRAPPER_CONSTRUCTOR = commandWrapperClass.getConstructor(craftServer, Command.class);
+
+            CUSTOM_SUGGESTIONS_FIELD = ArgumentCommandNode.class.getDeclaredField("customSuggestions");
+            CUSTOM_SUGGESTIONS_FIELD.setAccessible(true);
         } catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -82,14 +101,22 @@ final class CommodoreImpl implements Commodore {
         // do nothing - this is only called to trigger the static initializer
     }
 
-    private final Plugin plugin;
-    private final Object lock = new Object();
-
     private final List<LiteralCommandNode<?>> registeredNodes = new ArrayList<>();
-    private List<LiteralCommandNode<?>> pendingRegistration = null;
 
     CommodoreImpl(Plugin plugin) {
-        this.plugin = plugin;
+        // add all of our nodes when the server (re)loads - the dispatcher is replaced
+        // when this happens
+        plugin.getServer().getPluginManager().registerEvents(new Listener() {
+            @EventHandler
+            public void onLoad(ServerLoadEvent e) {
+                CommandDispatcher dispatcher = getDispatcher();
+                for (LiteralCommandNode<?> node : CommodoreImpl.this.registeredNodes) {
+                    //noinspection unchecked
+                    dispatcher.getRoot().addChild(node);
+                }
+            }
+
+        }, plugin);
     }
 
     @Override
@@ -108,34 +135,14 @@ final class CommodoreImpl implements Commodore {
         return Collections.unmodifiableList(this.registeredNodes);
     }
 
-    private void flush() {
-        CommandDispatcher dispatcher = getDispatcher();
-
-        synchronized (this.lock) {
-            if (this.pendingRegistration == null) {
-                return;
-            }
-
-            for (LiteralCommandNode<?> node : this.pendingRegistration) {
-                //noinspection unchecked
-                dispatcher.getRoot().addChild(node);
-                this.registeredNodes.add(node);
-            }
-            this.pendingRegistration = null;
-        }
-    }
-
     @Override
     public void register(LiteralCommandNode<?> node) {
         Objects.requireNonNull(node, "node");
 
-        synchronized (this.lock) {
-            if (this.pendingRegistration == null) {
-                this.pendingRegistration = new ArrayList<>();
-                this.plugin.getServer().getScheduler().runTaskLater(this.plugin, this::flush, 1L);
-            }
-            this.pendingRegistration.add(node);
-        }
+        CommandDispatcher dispatcher = getDispatcher();
+        //noinspection unchecked
+        dispatcher.getRoot().addChild(node);
+        this.registeredNodes.add(node);
     }
 
     @Override
@@ -143,6 +150,13 @@ final class CommodoreImpl implements Commodore {
     public void register(Command command, LiteralCommandNode<?> node) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(node, "node");
+
+        try {
+            SuggestionProvider wrapper = (SuggestionProvider) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(Bukkit.getServer(), command);
+            applyServerSuggestionCall(wrapper, Collections.singleton(node));
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
 
         for (String alias : Lists.asList(command.getLabel(), command.getAliases().toArray(new String[0]))) {
             LiteralCommandNode<?> toRegister = node;
@@ -156,6 +170,25 @@ final class CommodoreImpl implements Commodore {
                 }
             }
             register(toRegister);
+        }
+    }
+
+    private void applyServerSuggestionCall(SuggestionProvider suggestionProvider, Collection<? extends CommandNode<?>> nodes) {
+        for (CommandNode<?> node : nodes) {
+            if (node instanceof ArgumentCommandNode) {
+                ArgumentCommandNode argumentNode = (ArgumentCommandNode) node;
+                try {
+                    CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            // recursively.
+            Collection<? extends CommandNode<?>> children = node.getChildren();
+            if (children != null && !children.isEmpty()) {
+                applyServerSuggestionCall(suggestionProvider, children);
+            }
         }
     }
 
