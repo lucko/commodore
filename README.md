@@ -16,7 +16,7 @@ You need to add (or merge) the following sections into your `pom.xml` file.
         <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-shade-plugin</artifactId>
-            <version>3.1.1</version>
+            <version>3.2.1</version>
             <executions>
                 <execution>
                     <phase>package</phase>
@@ -47,7 +47,7 @@ You need to add (or merge) the following sections into your `pom.xml` file.
     <dependency>
         <groupId>me.lucko</groupId>
         <artifactId>commodore</artifactId>
-        <version>1.2</version>
+        <version>1.3</version>
         <scope>compile</scope>
     </dependency>
 </dependencies>
