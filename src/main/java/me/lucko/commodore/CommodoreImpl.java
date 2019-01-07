@@ -25,7 +25,6 @@
 
 package me.lucko.commodore;
 
-import com.google.common.collect.Lists;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
@@ -158,16 +157,14 @@ final class CommodoreImpl implements Commodore {
             e.printStackTrace();
         }
 
-        for (String alias : Lists.asList(command.getLabel(), command.getAliases().toArray(new String[0]))) {
+        for (String alias : Commodore.getAliases(command)) {
             LiteralCommandNode<?> toRegister = node;
             if (!node.getLiteral().equals(alias)) {
-                if (!node.getLiteral().equals(alias)) {
-                    LiteralCommandNode clone = new LiteralCommandNode(alias, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
-                    for (CommandNode child : node.getChildren()) {
-                        clone.addChild(child);
-                    }
-                    toRegister = clone;
+                LiteralCommandNode clone = new LiteralCommandNode(alias, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
+                for (CommandNode child : node.getChildren()) {
+                    clone.addChild(child);
                 }
+                toRegister = clone;
             }
             register(toRegister);
         }

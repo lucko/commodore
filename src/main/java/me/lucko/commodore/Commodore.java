@@ -30,9 +30,13 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 
 import org.bukkit.command.Command;
+import org.bukkit.command.PluginCommand;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Utility for using Minecraft's 1.13 'brigadier' library in Bukkit plugins.
@@ -113,6 +117,32 @@ public interface Commodore {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(argumentBuilder, "argumentBuilder");
         register(command, argumentBuilder.build());
+    }
+
+    /**
+     * Gets all of the aliases known for the given command.
+     *
+     * <p>This will include the main label, as well as defined aliases, and
+     * aliases including the fallback prefix added by Bukkit.</p>
+     *
+     * @param command the command
+     * @return the aliases
+     */
+    static Collection<String> getAliases(Command command) {
+        Stream<String> aliasesStream = Stream.concat(
+                Stream.of(command.getLabel()),
+                command.getAliases().stream()
+        );
+
+        if (command instanceof PluginCommand) {
+            String fallbackPrefix = ((PluginCommand) command).getPlugin().getName().toLowerCase().trim();
+            aliasesStream = aliasesStream.flatMap(alias -> Stream.of(
+                    alias,
+                    fallbackPrefix + ":" + alias
+            ));
+        }
+
+        return aliasesStream.distinct().collect(Collectors.toList());
     }
 
 }
