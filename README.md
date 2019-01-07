@@ -54,8 +54,8 @@ You need to add (or merge) the following sections into your `pom.xml` file.
 
 <repositories>
     <repository>
-        <id>luck-repo</id>
-        <url>https://repo.lucko.me/</url>
+        <id>minecraft-repo</id>
+        <url>https://libraries.minecraft.net/</url>
     </repository>
 </repositories>
 ```
