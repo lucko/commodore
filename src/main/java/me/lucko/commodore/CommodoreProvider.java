@@ -33,6 +33,21 @@ import java.util.Objects;
  * Factory for obtaining instances of {@link Commodore}.
  */
 public final class CommodoreProvider {
+    private CommodoreProvider() {
+        throw new AssertionError();
+    }
+
+    private static final Throwable SETUP_EXCEPTION = checkSupported();
+
+    private static Throwable checkSupported() {
+        try {
+            Class.forName("com.mojang.brigadier.CommandDispatcher");
+            CommodoreImpl.ensureSetup();
+            return null;
+        } catch (Throwable e) {
+            return e;
+        }
+    }
 
     /**
      * Checks to see if the Brigadier command system is supported by the server.
@@ -40,35 +55,22 @@ public final class CommodoreProvider {
      * @return true if commodore is supported.
      */
     public static boolean isSupported() {
-        try {
-            Class.forName("com.mojang.brigadier.CommandDispatcher");
-            CommodoreImpl.ensureSetup();
-            return true;
-        } catch (Throwable e) {
-            return false;
-        }
+        return SETUP_EXCEPTION == null;
     }
 
     /**
      * Obtains a {@link Commodore} instance for the given plugin.
      *
-     * <p>Throws a {@link RuntimeException} if brigadier is not
-     * {@link #isSupported() supported} by the server.</p>
-     *
      * @param plugin the plugin
      * @return the commodore instance
+     * @throws BrigadierUnsupportedException if brigadier is not {@link #isSupported() supported
+     * by the server.
      */
-    public static Commodore getCommodore(Plugin plugin) {
+    public static Commodore getCommodore(Plugin plugin) throws BrigadierUnsupportedException {
         Objects.requireNonNull(plugin, "plugin");
-
-        if (!isSupported()) {
-            throw new RuntimeException("Brigadier is not supported by the server.");
+        if (SETUP_EXCEPTION != null) {
+            throw new BrigadierUnsupportedException("Brigadier is not supported by the server.", SETUP_EXCEPTION);
         }
-
         return new CommodoreImpl(plugin);
-    }
-
-    private CommodoreProvider() {
-        throw new AssertionError();
     }
 }
