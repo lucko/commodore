@@ -43,7 +43,7 @@
         <dependency>
             <groupId>com.mojang</groupId>
             <artifactId>brigadier</artifactId>
-            <version>1.0.14</version>
+            <version>1.0.17</version>
             <scope>compile</scope>
             <exclusions>
                 <exclusion>
