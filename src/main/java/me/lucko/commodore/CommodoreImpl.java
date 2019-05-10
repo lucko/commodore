@@ -33,6 +33,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.ServerLoadEvent;
@@ -56,6 +57,9 @@ final class CommodoreImpl implements Commodore {
     // nms.MinecraftServer#getCommandDispatcher method
     private static final Method GET_COMMAND_DISPATCHER_METHOD;
 
+    // nms.CommandListenerWrapper#getBukkitSender method
+    private static final Method GET_BUKKIT_SENDER_METHOD;
+
     // nms.CommandDispatcher#getDispatcher (obfuscated) method
     private static final Method GET_BRIGADIER_DISPATCHER_METHOD;
 
@@ -64,6 +68,7 @@ final class CommodoreImpl implements Commodore {
 
     // ArgumentCommandNode#customSuggestions field
     private static final Field CUSTOM_SUGGESTIONS_FIELD;
+
 
     static {
         try {
@@ -74,6 +79,10 @@ final class CommodoreImpl implements Commodore {
             Class<?> minecraftServer = ReflectionUtil.nmsClass("MinecraftServer");
             GET_COMMAND_DISPATCHER_METHOD = minecraftServer.getDeclaredMethod("getCommandDispatcher");
             GET_COMMAND_DISPATCHER_METHOD.setAccessible(true);
+
+            Class<?> commandListenerWrapper = ReflectionUtil.nmsClass("CommandListenerWrapper");
+            GET_BUKKIT_SENDER_METHOD = commandListenerWrapper.getDeclaredMethod("getBukkitSender");
+            GET_BUKKIT_SENDER_METHOD.setAccessible(true);
 
             Class<?> commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
             Method getBrigadierDispatcherMethod = null;
@@ -127,6 +136,18 @@ final class CommodoreImpl implements Commodore {
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public CommandSender getBukkitSender(Object commandWrapperListener)
+    {
+        Objects.requireNonNull(commandWrapperListener, "commandWrapperListener");
+        try {
+            return (CommandSender) GET_BUKKIT_SENDER_METHOD.invoke(commandWrapperListener);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
     @Override
