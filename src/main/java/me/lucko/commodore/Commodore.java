@@ -30,6 +30,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 
 import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
 
 import java.util.Collection;
@@ -53,6 +54,21 @@ public interface Commodore {
      * @return the command dispatcher
      */
     CommandDispatcher getDispatcher();
+
+
+    /**
+     * Gets the CommandSender associated with the passed CommandWrapperListener.
+     *
+     * <p>Minecraft calls the brigadier with an instance of CommandWrapperListener,
+     * which cannot be accessed by non-nms using plugins. Therefore, this method takes
+     * an Object instead of a concrete class. The only type actually accepted is those
+     * from the <S> type provided by Minecraft. This can be used for checking whether
+     * a CommandSender can execute a given node.</p>
+     *
+     * @param commandWrapperListener the CommandWrapperListener instance provided by NMS.
+     * @return the CommandWrapperListener wrapped as a CommandSender.
+     */
+    CommandSender getBukkitSender(Object commandWrapperListener);
 
     /**
      * Gets a list of all nodes registered to the {@link CommandDispatcher} by
