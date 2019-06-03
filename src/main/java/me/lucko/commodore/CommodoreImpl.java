@@ -48,6 +48,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 final class CommodoreImpl implements Commodore {
 
@@ -128,7 +129,7 @@ final class CommodoreImpl implements Commodore {
     }
 
     @Override
-    public CommandDispatcher getDispatcher() {
+    public CommandDispatcher<?> getDispatcher() {
         try {
             Object mcServerObject = CONSOLE_FIELD.get(Bukkit.getServer());
             Object commandDispatcherObject = GET_COMMAND_DISPATCHER_METHOD.invoke(mcServerObject);
@@ -139,15 +140,13 @@ final class CommodoreImpl implements Commodore {
     }
 
     @Override
-    public CommandSender getBukkitSender(Object commandWrapperListener)
-    {
+    public CommandSender getBukkitSender(Object commandWrapperListener) {
         Objects.requireNonNull(commandWrapperListener, "commandWrapperListener");
         try {
             return (CommandSender) GET_BUKKIT_SENDER_METHOD.invoke(commandWrapperListener);
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
-
     }
 
     @Override
@@ -159,9 +158,9 @@ final class CommodoreImpl implements Commodore {
     public void register(LiteralCommandNode<?> node) {
         Objects.requireNonNull(node, "node");
 
-        CommandDispatcher dispatcher = getDispatcher();
+        CommandDispatcher<?> dispatcher = getDispatcher();
         //noinspection unchecked
-        dispatcher.getRoot().addChild(node);
+        dispatcher.getRoot().addChild((CommandNode) node);
         this.registeredNodes.add(node);
     }
 

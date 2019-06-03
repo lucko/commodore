@@ -49,7 +49,7 @@ public interface Commodore {
      *
      * <p>CraftBukkit doesn't use the same dispatcher instance throughout
      * the runtime of the server. The dispatcher instance is completely wiped
-     * (and replaced with a new instace) every time new plugins are loaded.</p>
+     * (and replaced with a new instance) every time new plugins are loaded.</p>
      *
      * @return the command dispatcher
      */
