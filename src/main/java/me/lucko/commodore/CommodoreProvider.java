@@ -63,7 +63,7 @@ public final class CommodoreProvider {
      *
      * @param plugin the plugin
      * @return the commodore instance
-     * @throws BrigadierUnsupportedException if brigadier is not {@link #isSupported() supported
+     * @throws BrigadierUnsupportedException if brigadier is not {@link #isSupported() supported}
      * by the server.
      */
     public static Commodore getCommodore(Plugin plugin) throws BrigadierUnsupportedException {

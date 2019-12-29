@@ -28,7 +28,6 @@ package me.lucko.commodore;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
-
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
@@ -55,14 +54,13 @@ public interface Commodore {
      */
     CommandDispatcher getDispatcher();
 
-
     /**
      * Gets the CommandSender associated with the passed CommandWrapperListener.
      *
      * <p>Minecraft calls the brigadier with an instance of CommandWrapperListener,
      * which cannot be accessed by non-nms using plugins. Therefore, this method takes
      * an Object instead of a concrete class. The only type actually accepted is those
-     * from the <S> type provided by Minecraft. This can be used for checking whether
+     * from the S type provided by Minecraft. This can be used for checking whether
      * a CommandSender can execute a given node.</p>
      *
      * @param commandWrapperListener the CommandWrapperListener instance provided by NMS.
