@@ -27,14 +27,17 @@ package me.lucko.commodore;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -57,13 +60,12 @@ public interface Commodore {
     /**
      * Gets the CommandSender associated with the passed CommandWrapperListener.
      *
-     * <p>Minecraft calls the brigadier with an instance of CommandWrapperListener,
-     * which cannot be accessed by non-nms using plugins. Therefore, this method takes
-     * an Object instead of a concrete class. The only type actually accepted is those
-     * from the S type provided by Minecraft. This can be used for checking whether
-     * a CommandSender can execute a given node.</p>
+     * <p>Minecraft calls brigadier command handlers with an instance of CommandWrapperListener,
+     * which cannot be accessed without accessing nms code. This method takes
+     * an Object as parameter, but the only type actually accepted is those
+     * from the S type provided by Minecraft.</p>
      *
-     * @param commandWrapperListener the CommandWrapperListener instance provided by NMS.
+     * @param commandWrapperListener the CommandWrapperListener instance from nms.
      * @return the CommandWrapperListener wrapped as a CommandSender.
      */
     CommandSender getBukkitSender(Object commandWrapperListener);
@@ -72,13 +74,78 @@ public interface Commodore {
      * Gets a list of all nodes registered to the {@link CommandDispatcher} by
      * this instance.
      *
-     * <p>Bear in mind that registrations are pushed to the dispatcher with a 1
-     * tick delay. Nodes will not appear in this list until they have actually
-     * been registered.</p>
-     *
      * @return a list of all registered nodes.
      */
     List<LiteralCommandNode<?>> getRegisteredNodes();
+
+    /**
+     * Registers the provided argument data to the dispatcher, against all
+     * aliases defined for the {@code command}.
+     *
+     * <p>Additionally applies the CraftBukkit {@link SuggestionProvider}
+     * to all arguments within the node, so ASK_SERVER suggestions can continue
+     * to function for the command.</p>
+     *
+     * <p>Players will only be sent argument data if they pass the provided
+     * {@code permissionTest}.</p>
+     *
+     * @param command the command to read aliases from
+     * @param node the argument data
+     * @param permissionTest the predicate to check whether players should be sent argument data
+     */
+    void register(Command command, LiteralCommandNode<?> node, Predicate<? super Player> permissionTest);
+
+    /**
+     * Registers the provided argument data to the dispatcher, against all
+     * aliases defined for the {@code command}.
+     *
+     * <p>Additionally applies the CraftBukkit {@link SuggestionProvider}
+     * to all arguments within the node, so ASK_SERVER suggestions can continue
+     * to function for the command.</p>
+     *
+     * <p>Players will only be sent argument data if they pass the provided
+     * {@code permissionTest}.</p>
+     *
+     * @param command the command to read aliases from
+     * @param argumentBuilder the argument data, in a builder form
+     * @param permissionTest the predicate to check whether players should be sent argument data
+     */
+    default void register(Command command, LiteralArgumentBuilder<?> argumentBuilder, Predicate<? super Player> permissionTest) {
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(argumentBuilder, "argumentBuilder");
+        Objects.requireNonNull(permissionTest, "permissionTest");
+        register(command, argumentBuilder.build(), permissionTest);
+    }
+
+    /**
+     * Registers the provided argument data to the dispatcher, against all
+     * aliases defined for the {@code command}.
+     *
+     * <p>Additionally applies the CraftBukkit {@link SuggestionProvider}
+     * to all arguments within the node, so ASK_SERVER suggestions can continue
+     * to function for the command.</p>
+     *
+     * @param command the command to read aliases from
+     * @param node the argument data
+     */
+    void register(Command command, LiteralCommandNode<?> node);
+
+    /**
+     * Registers the provided argument data to the dispatcher, against all
+     * aliases defined for the {@code command}.
+     *
+     * <p>Additionally applies the CraftBukkit {@link SuggestionProvider}
+     * to all arguments within the node, so ASK_SERVER suggestions can continue
+     * to function for the command.</p>
+     *
+     * @param command the command to read aliases from
+     * @param argumentBuilder the argument data, in a builder form
+     */
+    default void register(Command command, LiteralArgumentBuilder<?> argumentBuilder) {
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(argumentBuilder, "argumentBuilder");
+        register(command, argumentBuilder.build());
+    }
 
     /**
      * Registers the provided argument data to the dispatcher.
@@ -86,9 +153,7 @@ public interface Commodore {
      * <p>Equivalent to calling
      * {@link CommandDispatcher#register(LiteralArgumentBuilder)}.</p>
      *
-     * <p>The registration action occurs after a delay of one tick. This is
-     * because the dispatcher instance is completely replaced after all plugins
-     * have been loaded.</p>
+     * <p>Prefer using {@link #register(Command, LiteralCommandNode)}.</p>
      *
      * @param node the argument data
      */
@@ -100,37 +165,13 @@ public interface Commodore {
      * <p>Equivalent to calling
      * {@link CommandDispatcher#register(LiteralArgumentBuilder)}.</p>
      *
-     * <p>The registration action occurs after a delay of one tick. This is
-     * because the dispatcher instance is completely replaced after all plugins
-     * have been loaded.</p>
+     * <p>Prefer using {@link #register(Command, LiteralArgumentBuilder)}.</p>
      *
      * @param argumentBuilder the argument data
      */
     default void register(LiteralArgumentBuilder<?> argumentBuilder) {
         Objects.requireNonNull(argumentBuilder, "argumentBuilder");
         register(argumentBuilder.build());
-    }
-
-    /**
-     * Registers the provided argument data to the dispatcher, against all
-     * aliases defined for the {@code command}.
-     *
-     * @param command the command to read aliases from
-     * @param node the argument data
-     */
-    void register(Command command, LiteralCommandNode<?> node);
-
-    /**
-     * Registers the provided argument data to the dispatcher, against all
-     * aliases defined for the {@code command}.
-     *
-     * @param command the command to read aliases from
-     * @param argumentBuilder the argument data, in a builder form
-     */
-    default void register(Command command, LiteralArgumentBuilder<?> argumentBuilder) {
-        Objects.requireNonNull(command, "command");
-        Objects.requireNonNull(argumentBuilder, "argumentBuilder");
-        register(command, argumentBuilder.build());
     }
 
     /**
@@ -143,6 +184,8 @@ public interface Commodore {
      * @return the aliases
      */
     static Collection<String> getAliases(Command command) {
+        Objects.requireNonNull(command, "command");
+
         Stream<String> aliasesStream = Stream.concat(
                 Stream.of(command.getLabel()),
                 command.getAliases().stream()

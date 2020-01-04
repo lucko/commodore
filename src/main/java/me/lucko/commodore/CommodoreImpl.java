@@ -30,12 +30,13 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
-
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.event.server.ServerLoadEvent;
 import org.bukkit.plugin.Plugin;
 
@@ -44,11 +45,12 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 final class CommodoreImpl implements Commodore {
 
@@ -69,7 +71,6 @@ final class CommodoreImpl implements Commodore {
 
     // ArgumentCommandNode#customSuggestions field
     private static final Field CUSTOM_SUGGESTIONS_FIELD;
-
 
     static {
         try {
@@ -106,26 +107,12 @@ final class CommodoreImpl implements Commodore {
         }
     }
 
-    static void ensureSetup() {
-        // do nothing - this is only called to trigger the static initializer
-    }
-
+    private final Plugin plugin;
     private final List<LiteralCommandNode<?>> registeredNodes = new ArrayList<>();
 
     CommodoreImpl(Plugin plugin) {
-        // add all of our nodes when the server (re)loads - the dispatcher is replaced
-        // when this happens
-        plugin.getServer().getPluginManager().registerEvents(new Listener() {
-            @EventHandler
-            public void onLoad(ServerLoadEvent e) {
-                CommandDispatcher dispatcher = getDispatcher();
-                for (LiteralCommandNode<?> node : CommodoreImpl.this.registeredNodes) {
-                    //noinspection unchecked
-                    dispatcher.getRoot().addChild(node);
-                }
-            }
-
-        }, plugin);
+        this.plugin = plugin;
+        this.plugin.getServer().getPluginManager().registerEvents(new ServerReloadListener(), this.plugin);
     }
 
     @Override
@@ -133,7 +120,7 @@ final class CommodoreImpl implements Commodore {
         try {
             Object mcServerObject = CONSOLE_FIELD.get(Bukkit.getServer());
             Object commandDispatcherObject = GET_COMMAND_DISPATCHER_METHOD.invoke(mcServerObject);
-            return (CommandDispatcher) GET_BRIGADIER_DISPATCHER_METHOD.invoke(commandDispatcherObject);
+            return (CommandDispatcher<?>) GET_BRIGADIER_DISPATCHER_METHOD.invoke(commandDispatcherObject);
         } catch (IllegalAccessException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
@@ -155,58 +142,108 @@ final class CommodoreImpl implements Commodore {
     }
 
     @Override
-    public void register(LiteralCommandNode<?> node) {
+    public void register(Command command, LiteralCommandNode<?> node, Predicate<? super Player> permissionTest) {
+        Objects.requireNonNull(command, "command");
         Objects.requireNonNull(node, "node");
+        Objects.requireNonNull(permissionTest, "permissionTest");
 
-        CommandDispatcher<?> dispatcher = getDispatcher();
-        //noinspection unchecked
-        dispatcher.getRoot().addChild((CommandNode) node);
-        this.registeredNodes.add(node);
+        register(command, node);
+        this.plugin.getServer().getPluginManager().registerEvents(new PermissionListener(command, permissionTest), this.plugin);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void register(Command command, LiteralCommandNode<?> node) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(node, "node");
 
         try {
-            SuggestionProvider wrapper = (SuggestionProvider) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(Bukkit.getServer(), command);
-            applyServerSuggestionCall(wrapper, Collections.singleton(node));
+            SuggestionProvider<?> wrapper = (SuggestionProvider<?>) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(Bukkit.getServer(), command);
+            setCustomSuggestionProvider(node, wrapper);
         } catch (Throwable e) {
             e.printStackTrace();
         }
 
         for (String alias : Commodore.getAliases(command)) {
-            LiteralCommandNode<?> toRegister = node;
-            if (!node.getLiteral().equals(alias)) {
-                LiteralCommandNode clone = new LiteralCommandNode(alias, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
-                for (CommandNode child : node.getChildren()) {
-                    clone.addChild(child);
-                }
-                toRegister = clone;
+            if (node.getLiteral().equals(alias)) {
+                register(node);
+            } else {
+                register(renameLiteralNode(node, alias));
             }
-            register(toRegister);
         }
     }
 
-    private void applyServerSuggestionCall(SuggestionProvider suggestionProvider, Collection<? extends CommandNode<?>> nodes) {
-        for (CommandNode<?> node : nodes) {
-            if (node instanceof ArgumentCommandNode) {
-                ArgumentCommandNode argumentNode = (ArgumentCommandNode) node;
-                try {
-                    CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
-                } catch (IllegalAccessException e) {
-                    e.printStackTrace();
-                }
-            }
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Override
+    public void register(LiteralCommandNode<?> node) {
+        Objects.requireNonNull(node, "node");
 
-            // recursively.
-            Collection<? extends CommandNode<?>> children = node.getChildren();
-            if (children != null && !children.isEmpty()) {
-                applyServerSuggestionCall(suggestionProvider, children);
+        CommandDispatcher dispatcher = getDispatcher();
+        dispatcher.getRoot().addChild(node);
+        this.registeredNodes.add(node);
+    }
+
+    private static void setCustomSuggestionProvider(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
+        if (node instanceof ArgumentCommandNode) {
+            ArgumentCommandNode<?, ?> argumentNode = (ArgumentCommandNode<?, ?>) node;
+            try {
+                CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
+            } catch (IllegalAccessException e) {
+                e.printStackTrace();
             }
         }
+
+        // apply recursively to child nodes
+        for (CommandNode<?> child : node.getChildren()) {
+            setCustomSuggestionProvider(child, suggestionProvider);
+        }
+    }
+
+    private static <S> LiteralCommandNode<S> renameLiteralNode(LiteralCommandNode<S> node, String newLiteral) {
+        LiteralCommandNode<S> clone = new LiteralCommandNode<>(newLiteral, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
+        for (CommandNode<S> child : node.getChildren()) {
+            clone.addChild(child);
+        }
+        return clone;
+    }
+
+    /**
+     * Listens for server (re)loads, and re-adds all registered nodes to the dispatcher.
+     */
+    private final class ServerReloadListener implements Listener {
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        @EventHandler
+        public void onLoad(ServerLoadEvent e) {
+            CommandDispatcher dispatcher = getDispatcher();
+            for (LiteralCommandNode<?> node : CommodoreImpl.this.registeredNodes) {
+                dispatcher.getRoot().addChild(node);
+            }
+        }
+    }
+
+    /**
+     * Removes argument data for players without permission to view them.
+     */
+    private static final class PermissionListener implements Listener {
+        private final List<String> aliases;
+        private final Predicate<? super Player> permissionTest;
+
+        PermissionListener(Command pluginCommand, Predicate<? super Player> permissionTest) {
+            this.aliases = Commodore.getAliases(pluginCommand).stream()
+                    .flatMap(alias -> Stream.of(alias, "minecraft:" + alias))
+                    .collect(Collectors.toList());
+            this.permissionTest = permissionTest;
+        }
+
+        @EventHandler
+        public void onCommandSend(PlayerCommandSendEvent e) {
+            if (!this.permissionTest.test(e.getPlayer())) {
+                e.getCommands().removeAll(this.aliases);
+            }
+        }
+    }
+
+    static void ensureSetup() {
+        // do nothing - this is only called to trigger the static initializer
     }
 
 }
