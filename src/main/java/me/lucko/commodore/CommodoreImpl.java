@@ -46,11 +46,12 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 final class CommodoreImpl implements Commodore {
 
@@ -137,23 +138,24 @@ final class CommodoreImpl implements Commodore {
         return Collections.unmodifiableList(this.registeredNodes);
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    @Override
+    public void register(LiteralCommandNode<?> node) {
+        Objects.requireNonNull(node, "node");
+
+        CommandDispatcher dispatcher = getDispatcher();
+        dispatcher.getRoot().addChild(node);
+        this.registeredNodes.add(node);
+    }
+
     @Override
     public void register(Command command, LiteralCommandNode<?> node, Predicate<? super Player> permissionTest) {
         Objects.requireNonNull(command, "command");
         Objects.requireNonNull(node, "node");
         Objects.requireNonNull(permissionTest, "permissionTest");
 
-        register(command, node);
-        this.plugin.getServer().getPluginManager().registerEvents(new PermissionListener(command, permissionTest), this.plugin);
-    }
-
-    @Override
-    public void register(Command command, LiteralCommandNode<?> node) {
-        Objects.requireNonNull(command, "command");
-        Objects.requireNonNull(node, "node");
-
         try {
-            SuggestionProvider<?> wrapper = (SuggestionProvider<?>) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(Bukkit.getServer(), command);
+            SuggestionProvider<?> wrapper = (SuggestionProvider<?>) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(this.plugin.getServer(), command);
             setCustomSuggestionProvider(node, wrapper);
         } catch (Throwable e) {
             e.printStackTrace();
@@ -166,16 +168,16 @@ final class CommodoreImpl implements Commodore {
                 register(renameLiteralNode(node, alias));
             }
         }
+
+        this.plugin.getServer().getPluginManager().registerEvents(new CommandDataSendListener(command, permissionTest), this.plugin);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
     @Override
-    public void register(LiteralCommandNode<?> node) {
+    public void register(Command command, LiteralCommandNode<?> node) {
+        Objects.requireNonNull(command, "command");
         Objects.requireNonNull(node, "node");
 
-        CommandDispatcher dispatcher = getDispatcher();
-        dispatcher.getRoot().addChild(node);
-        this.registeredNodes.add(node);
+        register(command, node, command::testPermissionSilent);
     }
 
     private static void setCustomSuggestionProvider(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
@@ -217,21 +219,27 @@ final class CommodoreImpl implements Commodore {
     }
 
     /**
-     * Removes argument data for players without permission to view them.
+     * Removes minecraft namespaced argument data, & data for players without permission to view the
+     * corresponding commands.
      */
-    private static final class PermissionListener implements Listener {
-        private final List<String> aliases;
+    private static final class CommandDataSendListener implements Listener {
+        private final Set<String> aliases;
+        private final Set<String> minecraftPrefixedAliases;
         private final Predicate<? super Player> permissionTest;
 
-        PermissionListener(Command pluginCommand, Predicate<? super Player> permissionTest) {
-            this.aliases = Commodore.getAliases(pluginCommand).stream()
-                    .flatMap(alias -> Stream.of(alias, "minecraft:" + alias))
-                    .collect(Collectors.toList());
+        CommandDataSendListener(Command pluginCommand, Predicate<? super Player> permissionTest) {
+            this.aliases = new HashSet<>(Commodore.getAliases(pluginCommand));
+            this.minecraftPrefixedAliases = this.aliases.stream().map(alias -> "minecraft:" + alias).collect(Collectors.toSet());
             this.permissionTest = permissionTest;
         }
 
         @EventHandler
         public void onCommandSend(PlayerCommandSendEvent e) {
+            // always remove 'minecraft:' prefixed aliases added by craftbukkit.
+            // this happens because bukkit thinks our injected commands are vanilla commands.
+            e.getCommands().removeAll(this.minecraftPrefixedAliases);
+
+            // remove the actual aliases if the player doesn't pass the permission test
             if (!this.permissionTest.test(e.getPlayer())) {
                 e.getCommands().removeAll(this.aliases);
             }
