@@ -37,9 +37,13 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import me.lucko.commodore.MinecraftArgumentTypes;
 import me.lucko.commodore.file.Lexer.ConstantToken;
 import me.lucko.commodore.file.Lexer.StringToken;
 import me.lucko.commodore.file.Lexer.Token;
+import org.bukkit.NamespacedKey;
+
+import java.util.Arrays;
 
 /**
  * A parser for the {@link CommodoreFileFormat}.
@@ -117,15 +121,36 @@ class Parser<S> {
             case "brigadier:string":
                 return parseStringArgumentType();
             case "brigadier:integer":
-                return IntegerArgumentType.integer();
+                return parseIntegerArgumentType();
             case "brigadier:long":
-                return LongArgumentType.longArg();
+                return parseLongArgumentType();
             case "brigadier:float":
-                return FloatArgumentType.floatArg();
+                return parseFloatArgumentType();
             case "brigadier:double":
-                return DoubleArgumentType.doubleArg();
+                return parseDoubleArgumentType();
             default:
-                throw new ParserException(this, "Unknown argument type: " + argumentType);
+                return parseMinecraftArgumentType(argumentType);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private ArgumentType<?> parseMinecraftArgumentType(String argumentType) {
+        String[] key = argumentType.split(":");
+        if (key.length != 2) {
+            throw new ParserException(this, "Invalid key for argument type: " + Arrays.toString(key));
+        }
+
+        NamespacedKey namespacedKey;
+        try {
+            namespacedKey = new NamespacedKey(key[0], key[1]);
+        } catch (IllegalArgumentException e) {
+            throw new ParserException(this, "Invalid key for argument type: " + argumentType, e);
+        }
+
+        try {
+            return MinecraftArgumentTypes.getByKey(namespacedKey);
+        } catch (Throwable e) {
+            throw new ParserException(this, "Invalid key for argument type (not found in registry): " + argumentType, e);
         }
     }
 
@@ -148,12 +173,148 @@ class Parser<S> {
         }
     }
 
+    private IntegerArgumentType parseIntegerArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            int min = parseInt();
+            if (this.lexer.peek() instanceof StringToken) {
+                int max = parseInt();
+                return IntegerArgumentType.integer(min, max);
+            }
+            return IntegerArgumentType.integer(min);
+        }
+        return IntegerArgumentType.integer();
+    }
+    
+    private int parseInt() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for integer but got " + token);
+        }
+        String value = ((StringToken) token).string;
+
+        if (value.equals("min")) {
+            return Integer.MIN_VALUE;
+        }
+        if (value.equals("max")) {
+            return Integer.MAX_VALUE;
+        }
+
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw new ParserException(this, "Expected int but got " + value, e);
+        }
+    }
+
+    private LongArgumentType parseLongArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            long min = parseLong();
+            if (this.lexer.peek() instanceof StringToken) {
+                long max = parseLong();
+                return LongArgumentType.longArg(min, max);
+            }
+            return LongArgumentType.longArg(min);
+        }
+        return LongArgumentType.longArg();
+    }
+
+    private long parseLong() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for long but got " + token);
+        }
+        String value = ((StringToken) token).string;
+
+        if (value.equals("min")) {
+            return Long.MIN_VALUE;
+        }
+        if (value.equals("max")) {
+            return Long.MAX_VALUE;
+        }
+
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new ParserException(this, "Expected long but got " + value, e);
+        }
+    }
+
+    private FloatArgumentType parseFloatArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            float min = parseFloat();
+            if (this.lexer.peek() instanceof StringToken) {
+                float max = parseFloat();
+                return FloatArgumentType.floatArg(min, max);
+            }
+            return FloatArgumentType.floatArg(min);
+        }
+        return FloatArgumentType.floatArg();
+    }
+
+    private float parseFloat() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for float but got " + token);
+        }
+        String value = ((StringToken) token).string;
+
+        if (value.equals("min")) {
+            return Float.MIN_VALUE;
+        }
+        if (value.equals("max")) {
+            return Float.MAX_VALUE;
+        }
+
+        try {
+            return Float.parseFloat(value);
+        } catch (NumberFormatException e) {
+            throw new ParserException(this, "Expected float but got " + value, e);
+        }
+    }
+
+    private DoubleArgumentType parseDoubleArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            double min = parseDouble();
+            if (this.lexer.peek() instanceof StringToken) {
+                double max = parseDouble();
+                return DoubleArgumentType.doubleArg(min, max);
+            }
+            return DoubleArgumentType.doubleArg(min);
+        }
+        return DoubleArgumentType.doubleArg();
+    }
+
+    private double parseDouble() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for double but got " + token);
+        }
+        String value = ((StringToken) token).string;
+
+        if (value.equals("min")) {
+            return Double.MIN_VALUE;
+        }
+        if (value.equals("max")) {
+            return Double.MAX_VALUE;
+        }
+
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException e) {
+            throw new ParserException(this, "Expected double but got " + value);
+        }
+    }
+
     /**
      * Exception thrown if parsing fails.
      */
     static final class ParserException extends RuntimeException {
         private ParserException(Parser<?> parser, String message) {
             super(message + " (at line " + parser.lexer.currentLine() + ")");
+        }
+
+        private ParserException(Parser<?> parser, String message, Throwable cause) {
+            super(message + " (at line " + parser.lexer.currentLine() + ")", cause);
         }
     }
 }

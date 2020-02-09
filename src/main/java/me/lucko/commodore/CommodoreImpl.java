@@ -42,9 +42,9 @@ import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -87,14 +87,10 @@ final class CommodoreImpl implements Commodore {
             GET_BUKKIT_SENDER_METHOD.setAccessible(true);
 
             Class<?> commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
-            Method getBrigadierDispatcherMethod = null;
-            for (Method method : commandDispatcher.getDeclaredMethods()) {
-                if (method.getParameterCount() == 0 && CommandDispatcher.class.isAssignableFrom(method.getReturnType())) {
-                    getBrigadierDispatcherMethod = method;
-                    break;
-                }
-            }
-            GET_BRIGADIER_DISPATCHER_METHOD = Objects.requireNonNull(getBrigadierDispatcherMethod, "getBrigadierDispatcherMethod");
+            GET_BRIGADIER_DISPATCHER_METHOD = Arrays.stream(commandDispatcher.getDeclaredMethods())
+                    .filter(method -> method.getParameterCount() == 0)
+                    .filter(method -> CommandDispatcher.class.isAssignableFrom(method.getReturnType()))
+                    .findFirst().orElseThrow(NoSuchMethodException::new);
             GET_BRIGADIER_DISPATCHER_METHOD.setAccessible(true);
 
             Class<?> commandWrapperClass = ReflectionUtil.obcClass("command.BukkitCommandWrapper");
@@ -102,7 +98,7 @@ final class CommodoreImpl implements Commodore {
 
             CUSTOM_SUGGESTIONS_FIELD = ArgumentCommandNode.class.getDeclaredField("customSuggestions");
             CUSTOM_SUGGESTIONS_FIELD.setAccessible(true);
-        } catch (NoSuchMethodException | NoSuchFieldException | ClassNotFoundException e) {
+        } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
@@ -121,7 +117,7 @@ final class CommodoreImpl implements Commodore {
             Object mcServerObject = CONSOLE_FIELD.get(Bukkit.getServer());
             Object commandDispatcherObject = GET_COMMAND_DISPATCHER_METHOD.invoke(mcServerObject);
             return (CommandDispatcher<?>) GET_BRIGADIER_DISPATCHER_METHOD.invoke(commandDispatcherObject);
-        } catch (IllegalAccessException | InvocationTargetException e) {
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
     }
@@ -131,7 +127,7 @@ final class CommodoreImpl implements Commodore {
         Objects.requireNonNull(commandWrapperListener, "commandWrapperListener");
         try {
             return (CommandSender) GET_BUKKIT_SENDER_METHOD.invoke(commandWrapperListener);
-        } catch (IllegalAccessException | InvocationTargetException e) {
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
     }
