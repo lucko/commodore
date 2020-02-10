@@ -43,6 +43,7 @@ import me.lucko.commodore.file.Lexer.StringToken;
 import me.lucko.commodore.file.Lexer.Token;
 import org.bukkit.NamespacedKey;
 
+import java.lang.reflect.Constructor;
 import java.util.Arrays;
 
 /**
@@ -128,6 +129,10 @@ class Parser<S> {
                 return parseFloatArgumentType();
             case "brigadier:double":
                 return parseDoubleArgumentType();
+            case "minecraft:entity":
+                return parseEntityArgumentType();
+            case "minecraft:score_holder":
+                return parseScoreHolderArgumentType();
             default:
                 return parseMinecraftArgumentType(argumentType);
         }
@@ -151,6 +156,59 @@ class Parser<S> {
             return MinecraftArgumentTypes.getByKey(namespacedKey);
         } catch (Throwable e) {
             throw new ParserException(this, "Invalid key for argument type (not found in registry): " + argumentType, e);
+        }
+    }
+
+    private ArgumentType<?> parseEntityArgumentType() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for entity selection type but got " + token);
+        }
+
+        boolean single;
+        boolean playersOnly;
+
+        String entitySelectionType = ((StringToken) token).string;
+        switch (entitySelectionType) {
+            case "entity":
+                single = true;
+                playersOnly = false;
+                break;
+            case "entities":
+                single = false;
+                playersOnly = false;
+                break;
+            case "player":
+                single = true;
+                playersOnly = true;
+                break;
+            case "players":
+                single = false;
+                playersOnly = true;
+                break;
+            default:
+                throw new ParserException(this, "Unknown entity selection type: " + entitySelectionType);
+        }
+
+        return constructMinecraftArgumentType(NamespacedKey.minecraft("entity"), new Class[]{boolean.class, boolean.class}, single, playersOnly);
+    }
+
+    private ArgumentType<?> parseScoreHolderArgumentType() {
+        boolean multiple = false;
+        if (this.lexer.peek() instanceof StringToken) {
+            multiple = parseBoolean();
+        }
+
+        return constructMinecraftArgumentType(NamespacedKey.minecraft("score_holder"), new Class[]{boolean.class}, multiple);
+    }
+
+    private static ArgumentType<?> constructMinecraftArgumentType(NamespacedKey key, Class<?>[] argTypes, Object... args) {
+        try {
+            final Constructor<? extends ArgumentType<?>> constructor = MinecraftArgumentTypes.getClassByKey(key).getDeclaredConstructor(argTypes);
+            constructor.setAccessible(true);
+            return constructor.newInstance(args);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -184,7 +242,43 @@ class Parser<S> {
         }
         return IntegerArgumentType.integer();
     }
-    
+
+    private LongArgumentType parseLongArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            long min = parseLong();
+            if (this.lexer.peek() instanceof StringToken) {
+                long max = parseLong();
+                return LongArgumentType.longArg(min, max);
+            }
+            return LongArgumentType.longArg(min);
+        }
+        return LongArgumentType.longArg();
+    }
+
+    private FloatArgumentType parseFloatArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            float min = parseFloat();
+            if (this.lexer.peek() instanceof StringToken) {
+                float max = parseFloat();
+                return FloatArgumentType.floatArg(min, max);
+            }
+            return FloatArgumentType.floatArg(min);
+        }
+        return FloatArgumentType.floatArg();
+    }
+
+    private DoubleArgumentType parseDoubleArgumentType() {
+        if (this.lexer.peek() instanceof StringToken) {
+            double min = parseDouble();
+            if (this.lexer.peek() instanceof StringToken) {
+                double max = parseDouble();
+                return DoubleArgumentType.doubleArg(min, max);
+            }
+            return DoubleArgumentType.doubleArg(min);
+        }
+        return DoubleArgumentType.doubleArg();
+    }
+
     private int parseInt() {
         Token token = this.lexer.next();
         if (!(token instanceof StringToken)) {
@@ -204,18 +298,6 @@ class Parser<S> {
         } catch (NumberFormatException e) {
             throw new ParserException(this, "Expected int but got " + value, e);
         }
-    }
-
-    private LongArgumentType parseLongArgumentType() {
-        if (this.lexer.peek() instanceof StringToken) {
-            long min = parseLong();
-            if (this.lexer.peek() instanceof StringToken) {
-                long max = parseLong();
-                return LongArgumentType.longArg(min, max);
-            }
-            return LongArgumentType.longArg(min);
-        }
-        return LongArgumentType.longArg();
     }
 
     private long parseLong() {
@@ -239,18 +321,6 @@ class Parser<S> {
         }
     }
 
-    private FloatArgumentType parseFloatArgumentType() {
-        if (this.lexer.peek() instanceof StringToken) {
-            float min = parseFloat();
-            if (this.lexer.peek() instanceof StringToken) {
-                float max = parseFloat();
-                return FloatArgumentType.floatArg(min, max);
-            }
-            return FloatArgumentType.floatArg(min);
-        }
-        return FloatArgumentType.floatArg();
-    }
-
     private float parseFloat() {
         Token token = this.lexer.next();
         if (!(token instanceof StringToken)) {
@@ -272,18 +342,6 @@ class Parser<S> {
         }
     }
 
-    private DoubleArgumentType parseDoubleArgumentType() {
-        if (this.lexer.peek() instanceof StringToken) {
-            double min = parseDouble();
-            if (this.lexer.peek() instanceof StringToken) {
-                double max = parseDouble();
-                return DoubleArgumentType.doubleArg(min, max);
-            }
-            return DoubleArgumentType.doubleArg(min);
-        }
-        return DoubleArgumentType.doubleArg();
-    }
-
     private double parseDouble() {
         Token token = this.lexer.next();
         if (!(token instanceof StringToken)) {
@@ -302,6 +360,22 @@ class Parser<S> {
             return Double.parseDouble(value);
         } catch (NumberFormatException e) {
             throw new ParserException(this, "Expected double but got " + value);
+        }
+    }
+
+    private boolean parseBoolean() {
+        Token token = this.lexer.next();
+        if (!(token instanceof StringToken)) {
+            throw new ParserException(this, "Expected string token for boolean but got " + token);
+        }
+        String value = ((StringToken) token).string;
+
+        if (value.equals("true")) {
+            return true;
+        } else if (value.equals("false")) {
+            return false;
+        } else {
+            throw new ParserException(this, "Expected true/false but got " + value);
         }
     }
 
