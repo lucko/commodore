@@ -184,7 +184,12 @@ final class CommodoreImpl implements Commodore {
         if (node instanceof ArgumentCommandNode) {
             ArgumentCommandNode<?, ?> argumentNode = (ArgumentCommandNode<?, ?>) node;
             try {
-                CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
+                Object value = CUSTOM_SUGGESTIONS_FIELD.get(argumentNode);
+                if (value == Suggestions.dontAskServer()) {
+                    CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, null);
+                } else {
+                    CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
+                }
             } catch (IllegalAccessException e) {
                 e.printStackTrace();
             }
