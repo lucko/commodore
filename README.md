@@ -2,6 +2,8 @@
 
 commodore is a utility for using Minecraft's 1.13 [brigadier](https://github.com/Mojang/brigadier) library in Bukkit plugins. It allows you to easily register command completion data for your plugin's commands.
 
+If you have questions, feel free to ask in [Discord](https://discord.gg/AEqagwA).
+
 #### Example
 ![](https://i.imgur.com/4VElTNG.png)
 ![](https://i.imgur.com/o3AcyVY.png)
