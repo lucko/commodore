@@ -88,15 +88,11 @@ class Parser<S> {
         ArgumentBuilder<S, ?> node;
 
         if (this.lexer.peek() instanceof StringToken) {
+            boolean dontAskServer = parseDontAskServer();
             RequiredArgumentBuilder<S, ?> arg = RequiredArgumentBuilder.argument(name, parseArgumentType());
-
-            // look for 'dont_ask_server' tag at end of declaration
-            Token peeked = this.lexer.peek();
-            if (peeked instanceof StringToken && ((StringToken) peeked).string.equals("dont_ask_server")) {
-                this.lexer.next();
+            if (dontAskServer) {
                 arg.suggests(Suggestions.dontAskServer());
             }
-
             node = arg;
         } else {
             node = LiteralArgumentBuilder.literal(name);
@@ -117,6 +113,14 @@ class Parser<S> {
         }
 
         return node.build();
+    }
+
+    private boolean parseDontAskServer() {
+        if (((StringToken) this.lexer.peek()).string.equals("dont_ask_server")) {
+            this.lexer.next();
+            return true;
+        }
+        return false;
     }
 
     private ArgumentType<?> parseArgumentType() {
