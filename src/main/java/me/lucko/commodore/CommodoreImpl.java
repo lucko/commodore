@@ -30,6 +30,7 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import com.mojang.brigadier.tree.RootCommandNode;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -54,8 +55,6 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-
-
 final class CommodoreImpl implements Commodore {
 
     // obc.CraftServer#console field
@@ -76,11 +75,13 @@ final class CommodoreImpl implements Commodore {
     // ArgumentCommandNode#customSuggestions field
     private static final Field CUSTOM_SUGGESTIONS_FIELD;
 
-    // CommandNode#literals field
-    private static final Field LITTERALS_FIELD;
-
-    // CommandNode#arguments field
+    // CommandNode#children, CommandNode#literals, CommandNode#arguments fields
+    private static final Field CHILDREN_FIELD;
+    private static final Field LITERALS_FIELD;
     private static final Field ARGUMENTS_FIELD;
+
+    // An array of the CommandNode fields above: [#children, #literals, #arguments]
+    private static final Field[] CHILDREN_FIELDS;
 
     static {
         try {
@@ -109,11 +110,13 @@ final class CommodoreImpl implements Commodore {
             CUSTOM_SUGGESTIONS_FIELD = ArgumentCommandNode.class.getDeclaredField("customSuggestions");
             CUSTOM_SUGGESTIONS_FIELD.setAccessible(true);
 
-            LITTERALS_FIELD = CommandNode.class.getDeclaredField("literals");
-            LITTERALS_FIELD.setAccessible(true);
-
+            CHILDREN_FIELD = CommandNode.class.getDeclaredField("children");
+            LITERALS_FIELD = CommandNode.class.getDeclaredField("literals");
             ARGUMENTS_FIELD = CommandNode.class.getDeclaredField("arguments");
-            ARGUMENTS_FIELD.setAccessible(true);
+            CHILDREN_FIELDS = new Field[]{CHILDREN_FIELD, LITERALS_FIELD, ARGUMENTS_FIELD};
+            for (Field field : CHILDREN_FIELDS) {
+                field.setAccessible(true);
+            }
 
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
@@ -139,30 +142,6 @@ final class CommodoreImpl implements Commodore {
         }
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private void removeCommandFromDispatcher(String name) {
-        CommandDispatcher dispatcher = getDispatcher();
-        CommandNode<?> node = dispatcher.getRoot().getChild(name);
-        if (node == null)
-            return;
-
-        dispatcher.getRoot().getChildren().remove(node);
-
-        try {
-            Map<String, ?> litterals = (Map<String, ?>) LITTERALS_FIELD.get(dispatcher.getRoot());
-            litterals.remove(name);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-
-        try {
-            Map<String, ?> arguments = (Map<String, ?>) ARGUMENTS_FIELD.get(dispatcher.getRoot());
-            arguments.remove(name);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @Override
     public CommandSender getBukkitSender(Object commandWrapperListener) {
         Objects.requireNonNull(commandWrapperListener, "commandWrapperListener");
@@ -183,10 +162,11 @@ final class CommodoreImpl implements Commodore {
     public void register(LiteralCommandNode<?> node) {
         Objects.requireNonNull(node, "node");
 
-        removeCommandFromDispatcher(node.getName());
-
         CommandDispatcher dispatcher = getDispatcher();
-        dispatcher.getRoot().addChild(node);
+        RootCommandNode root = dispatcher.getRoot();
+
+        removeChild(root, node.getName());
+        root.addChild(node);
         this.registeredNodes.add(node);
     }
 
@@ -222,6 +202,18 @@ final class CommodoreImpl implements Commodore {
         register(command, node, command::testPermissionSilent);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static void removeChild(RootCommandNode root, String name) {
+        try {
+            for (Field field : CHILDREN_FIELDS) {
+                Map<String, ?> children = (Map<String, ?>) field.get(root);
+                children.remove(name);
+            }
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private static void setCustomSuggestionProvider(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
         if (node instanceof ArgumentCommandNode) {
             ArgumentCommandNode<?, ?> argumentNode = (ArgumentCommandNode<?, ?>) node;
@@ -253,11 +245,12 @@ final class CommodoreImpl implements Commodore {
         @SuppressWarnings({"rawtypes", "unchecked"})
         @EventHandler
         public void onLoad(ServerLoadEvent e) {
-
             CommandDispatcher dispatcher = getDispatcher();
+            RootCommandNode root = dispatcher.getRoot();
+
             for (LiteralCommandNode<?> node : CommodoreImpl.this.registeredNodes) {
-                removeCommandFromDispatcher(node.getName());
-                dispatcher.getRoot().addChild(node);
+                removeChild(root, node.getName());
+                root.addChild(node);
             }
         }
     }
