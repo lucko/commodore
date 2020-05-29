@@ -26,6 +26,7 @@
 package me.lucko.commodore;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
@@ -46,6 +47,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -170,6 +172,7 @@ final class CommodoreImpl implements Commodore {
         this.registeredNodes.add(node);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void register(Command command, LiteralCommandNode<?> node, Predicate<? super Player> permissionTest) {
         Objects.requireNonNull(command, "command");
@@ -183,11 +186,16 @@ final class CommodoreImpl implements Commodore {
             e.printStackTrace();
         }
 
-        for (String alias : Commodore.getAliases(command)) {
+        Collection<String> aliases = Commodore.getAliases(command);
+        if (!aliases.contains(node.getLiteral())) {
+            node = renameLiteralNode(node, command.getName());
+        }
+
+        for (String alias : aliases) {
             if (node.getLiteral().equals(alias)) {
                 register(node);
             } else {
-                register(renameLiteralNode(node, alias));
+                register(LiteralArgumentBuilder.literal(alias).redirect((LiteralCommandNode<Object>)node).build());
             }
         }
 
