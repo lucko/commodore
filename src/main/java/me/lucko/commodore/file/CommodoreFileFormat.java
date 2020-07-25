@@ -28,14 +28,10 @@ package me.lucko.commodore.file;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.Reader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -47,6 +43,11 @@ import java.nio.file.Path;
 public final class CommodoreFileFormat {
     private CommodoreFileFormat() {}
 
+    public static final CommodoreFileReader READER = CommodoreFileReader.builder()
+            .withArgumentTypeParser(BrigadierArgumentTypeParser.INSTANCE)
+            .withArgumentTypeParser(MinecraftArgumentTypeParser.INSTANCE)
+            .build();
+
     /**
      * Parses a {@link LiteralCommandNode} from a commodore file.
      *
@@ -55,16 +56,10 @@ public final class CommodoreFileFormat {
      * @return the command node
      * @throws IOException if an error occurs whilst reading the file
      * @throws RuntimeException if an error occurs whilst lexing or parsing the file
+     * @see CommodoreFileReader#parse(Reader)
      */
     public static <S> LiteralCommandNode<S> parse(Reader reader) throws IOException {
-        try {
-            return new Parser<S>(new Lexer(reader)).parse();
-        } catch (Lexer.LexerException e) {
-            if (e.getCause() instanceof IOException) {
-                throw ((IOException) e.getCause());
-            }
-            throw e;
-        }
+        return READER.parse(reader);
     }
 
     /**
@@ -75,11 +70,10 @@ public final class CommodoreFileFormat {
      * @return the command node
      * @throws IOException if an error occurs whilst reading the file
      * @throws RuntimeException if an error occurs whilst lexing or parsing the file
+     * @see CommodoreFileReader#parse(InputStream)
      */
     public static <S> LiteralCommandNode<S> parse(InputStream inputStream) throws IOException {
-        try (InputStreamReader reader = new InputStreamReader(inputStream)) {
-            return parse(reader);
-        }
+        return READER.parse(inputStream);
     }
 
     /**
@@ -90,11 +84,10 @@ public final class CommodoreFileFormat {
      * @return the command node
      * @throws IOException if an error occurs whilst reading the file
      * @throws RuntimeException if an error occurs whilst lexing or parsing the file
+     * @see CommodoreFileReader#parse(Path)
      */
     public static <S> LiteralCommandNode<S> parse(Path path) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            return parse(reader);
-        }
+        return READER.parse(path);
     }
 
     /**
@@ -105,9 +98,10 @@ public final class CommodoreFileFormat {
      * @return the command node
      * @throws IOException if an error occurs whilst reading the file
      * @throws RuntimeException if an error occurs whilst lexing or parsing the file
+     * @see CommodoreFileReader#parse(File)
      */
     public static <S> LiteralCommandNode<S> parse(File file) throws IOException {
-        return parse(file.toPath());
+        return READER.parse(file);
     }
 
 }

@@ -26,6 +26,7 @@
 package me.lucko.commodore;
 
 import com.mojang.brigadier.arguments.ArgumentType;
+
 import org.bukkit.NamespacedKey;
 
 import java.lang.reflect.Constructor;
@@ -68,6 +69,22 @@ public final class MinecraftArgumentTypes {
             ARGUMENT_REGISTRY_ENTRY_CLASS_FIELD.setAccessible(true);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    /**
+     * Gets if a argument is registered for the given key.
+     *
+     * @param key the key
+     * @return if an argument is registered
+     */
+    public static boolean isRegistered(NamespacedKey key) {
+        try {
+            Object minecraftKey = MINECRAFT_KEY_CONSTRUCTOR.newInstance(key.getNamespace(), key.getKey());
+            Object entry = ARGUMENT_REGISTRY_GET_BY_KEY_METHOD.invoke(null, minecraftKey);
+            return entry != null;
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
         }
     }
 

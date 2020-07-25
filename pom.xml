@@ -6,7 +6,7 @@
 
     <groupId>me.lucko</groupId>
     <artifactId>commodore</artifactId>
-    <version>1.8</version>
+    <version>1.9</version>
 
     <name>commodore</name>
     <description>Utility for using Minecraft's 1.13 'brigadier' library in Bukkit plugins.</description>
@@ -41,6 +41,18 @@
 
     <dependencies>
         <dependency>
+            <groupId>me.lucko</groupId>
+            <artifactId>commodore-file</artifactId>
+            <version>1.0</version>
+            <scope>compile</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.mojang</groupId>
+                    <artifactId>brigadier</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
             <groupId>com.mojang</groupId>
             <artifactId>brigadier</artifactId>
             <version>1.0.17</version>
@@ -55,7 +67,7 @@
         <dependency>
             <groupId>org.bukkit</groupId>
             <artifactId>bukkit</artifactId>
-            <version>1.15.1-R0.1-SNAPSHOT</version>
+            <version>1.15.2-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
