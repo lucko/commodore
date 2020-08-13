@@ -92,9 +92,9 @@ You need to add (or merge) the following sections into your `pom.xml` file.
                     </goals>
                     <configuration>
                         <artifactSet>
-                            <includes>
-                                <include>me.lucko:commodore</include>
-                            </includes>
+                            <excludes>
+                                <exclude>me.lucko:commodore</exclude>
+                            </excludes>
                         </artifactSet>
                         <relocations>
                             <relocation>
@@ -114,7 +114,7 @@ You need to add (or merge) the following sections into your `pom.xml` file.
     <dependency>
         <groupId>me.lucko</groupId>
         <artifactId>commodore</artifactId>
-        <version>1.5</version>
+        <version>1.9</version>
         <scope>compile</scope>
     </dependency>
 </dependencies>
