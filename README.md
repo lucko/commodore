@@ -93,7 +93,7 @@ You need to add (or merge) the following sections into your `pom.xml` file.
                     <configuration>
                         <artifactSet>
                             <excludes>
-                                <exclude>me.lucko:commodore</exclude>
+                                <exclude>com.mojang:brigadier</exclude>
                             </excludes>
                         </artifactSet>
                         <relocations>
