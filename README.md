@@ -150,7 +150,7 @@ dependencies {
 
 shadowJar {
   dependencies {
-    exclude(dependency('com.mojang:brigadier:1.0.17'))
+    exclude(dependency('com.mojang:brigadier'))
   }
   
   /* vvv Replace with the package of your plugin vvv */
