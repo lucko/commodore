@@ -71,12 +71,14 @@ Another example of a `.commodore` file can be found [here](https://github.com/lu
 
 ## Usage
 
-This guide assumes your plugin is built using Maven. The steps will be similar for Gradle though.
+This guide assumes your plugin is built using Maven or Gradle though.
 
 #### 1) Configure your build script to shade commodore into your plugin jar
 
-You need to add (or merge) the following sections into your `pom.xml` file.
+<details open>
+<summary>Maven</summary>
 
+You need to add (or merge) the following sections into your `pom.xml` file.
 ```xml
 <build>
     <plugins>
@@ -126,6 +128,36 @@ You need to add (or merge) the following sections into your `pom.xml` file.
     </repository>
 </repositories>
 ```
+</details>
+
+<details>
+<summary>Gradle</summary>
+
+You need to add (or merge) the following sections into your `build.gradle` file.
+```gradle
+plugins {
+  id 'com.github.johnrengelman.shadow' version '6.1.0'
+}
+
+repositories {
+  mavenCentral()
+  maven { url 'https://libraries.minecraft.net/' }
+}
+
+dependencies {
+  implementation 'me.lucko:commodore:1.9'
+}
+
+shadowJar {
+  dependencies {
+    exclude(dependency('com.mojang:brigadier'))
+  }
+  
+  /* vvv Replace with the package of your plugin vvv */
+  relocate 'me.lucko.commodore', 'com.yourdomain.yourplugin.commodore'
+}
+```
+</details>
 
 #### 2) Setup commodore in your plugin
 
