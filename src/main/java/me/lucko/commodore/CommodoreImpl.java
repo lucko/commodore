@@ -87,19 +87,30 @@ final class CommodoreImpl implements Commodore {
 
     static {
         try {
+            final Class<?> minecraftServer;
+            final Class<?> commandListenerWrapper;
+            final Class<?> commandDispatcher;
+
+            if (ReflectionUtil.minecraftVersion() > 16) {
+                minecraftServer = ReflectionUtil.mcClass("server.MinecraftServer");
+                commandListenerWrapper = ReflectionUtil.mcClass("commands.CommandListenerWrapper");
+                commandDispatcher = ReflectionUtil.mcClass("commands.CommandDispatcher");
+            } else {
+                minecraftServer = ReflectionUtil.nmsClass("MinecraftServer");
+                commandListenerWrapper = ReflectionUtil.nmsClass("CommandListenerWrapper");
+                commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
+            }
+
             Class<?> craftServer = ReflectionUtil.obcClass("CraftServer");
             CONSOLE_FIELD = craftServer.getDeclaredField("console");
             CONSOLE_FIELD.setAccessible(true);
 
-            Class<?> minecraftServer = ReflectionUtil.nmsClass("MinecraftServer");
             GET_COMMAND_DISPATCHER_METHOD = minecraftServer.getDeclaredMethod("getCommandDispatcher");
             GET_COMMAND_DISPATCHER_METHOD.setAccessible(true);
 
-            Class<?> commandListenerWrapper = ReflectionUtil.nmsClass("CommandListenerWrapper");
             GET_BUKKIT_SENDER_METHOD = commandListenerWrapper.getDeclaredMethod("getBukkitSender");
             GET_BUKKIT_SENDER_METHOD.setAccessible(true);
 
-            Class<?> commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
             GET_BRIGADIER_DISPATCHER_METHOD = Arrays.stream(commandDispatcher.getDeclaredMethods())
                     .filter(method -> method.getParameterCount() == 0)
                     .filter(method -> CommandDispatcher.class.isAssignableFrom(method.getReturnType()))
