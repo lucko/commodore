@@ -94,9 +94,9 @@ You need to add (or merge) the following sections into your `pom.xml` file.
                     </goals>
                     <configuration>
                         <artifactSet>
-                            <includes>
-                                <include>me.lucko:commodore</include>
-                            </includes>
+                            <excludes>
+                                <exclude>com.mojang:brigadier</exclude>
+                            </excludes>
                         </artifactSet>
                         <relocations>
                             <relocation>
