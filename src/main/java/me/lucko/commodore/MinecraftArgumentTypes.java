@@ -51,11 +51,20 @@ public final class MinecraftArgumentTypes {
 
     static {
         try {
-            Class<?> minecraftKey = ReflectionUtil.nmsClass("MinecraftKey");
+            final Class<?> minecraftKey;
+            final Class<?> argumentRegistry;
+
+            if (ReflectionUtil.minecraftVersion() > 16) {
+                minecraftKey = ReflectionUtil.mcClass("resources.MinecraftKey");
+                argumentRegistry = ReflectionUtil.mcClass("commands.synchronization.ArgumentRegistry");
+            } else {
+                minecraftKey = ReflectionUtil.nmsClass("MinecraftKey");
+                argumentRegistry = ReflectionUtil.nmsClass("ArgumentRegistry");
+            }
+
             MINECRAFT_KEY_CONSTRUCTOR = minecraftKey.getConstructor(String.class, String.class);
             MINECRAFT_KEY_CONSTRUCTOR.setAccessible(true);
 
-            Class<?> argumentRegistry = ReflectionUtil.nmsClass("ArgumentRegistry");
             ARGUMENT_REGISTRY_GET_BY_KEY_METHOD = Arrays.stream(argumentRegistry.getDeclaredMethods())
                     .filter(method -> method.getParameterCount() == 1)
                     .filter(method -> minecraftKey.equals(method.getParameterTypes()[0]))

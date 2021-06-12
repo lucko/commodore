@@ -6,7 +6,7 @@
 
     <groupId>me.lucko</groupId>
     <artifactId>commodore</artifactId>
-    <version>1.9</version>
+    <version>1.10-SNAPSHOT</version>
 
     <name>commodore</name>
     <description>Utility for using Minecraft's 1.13 'brigadier' library in Bukkit plugins.</description>
