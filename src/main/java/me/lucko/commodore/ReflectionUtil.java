@@ -72,7 +72,7 @@ final class ReflectionUtil {
 
     public static int minecraftVersion() {
         try {
-            final Matcher matcher = Pattern.compile("\\(MC: (\\d)\\.(\\d+)\\.?(\\d+?)?\\)").matcher(Bukkit.getVersion());
+            final Matcher matcher = Pattern.compile("\\(MC: (\\d)\\.(\\d+)\\.?(\\d+?)?( .*)?\\)").matcher(Bukkit.getVersion());
             if (matcher.find()) {
                 return Integer.parseInt(matcher.toMatchResult().group(2), 10);
             } else {

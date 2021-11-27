@@ -105,7 +105,10 @@ final class CommodoreImpl implements Commodore {
             CONSOLE_FIELD = craftServer.getDeclaredField("console");
             CONSOLE_FIELD.setAccessible(true);
 
-            GET_COMMAND_DISPATCHER_METHOD = minecraftServer.getDeclaredMethod("getCommandDispatcher");
+            GET_COMMAND_DISPATCHER_METHOD = Arrays.stream(minecraftServer.getDeclaredMethods())
+                    .filter(method -> method.getParameterCount() == 0)
+                    .filter(method -> commandDispatcher.isAssignableFrom(method.getReturnType()))
+                    .findFirst().orElseThrow(NoSuchMethodException::new);
             GET_COMMAND_DISPATCHER_METHOD.setAccessible(true);
 
             GET_BUKKIT_SENDER_METHOD = commandListenerWrapper.getDeclaredMethod("getBukkitSender");
