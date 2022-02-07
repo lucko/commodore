@@ -77,6 +77,9 @@ final class CommodoreImpl implements Commodore {
     // ArgumentCommandNode#customSuggestions field
     private static final Field CUSTOM_SUGGESTIONS_FIELD;
 
+    // CommandNode#command
+    private static final Field COMMAND_EXECUTE_FUNCTION_FIELD;
+
     // CommandNode#children, CommandNode#literals, CommandNode#arguments fields
     private static final Field CHILDREN_FIELD;
     private static final Field LITERALS_FIELD;
@@ -84,6 +87,10 @@ final class CommodoreImpl implements Commodore {
 
     // An array of the CommandNode fields above: [#children, #literals, #arguments]
     private static final Field[] CHILDREN_FIELDS;
+
+    // Dummy instance of Command used to ensure the executable bit gets set on
+    // mock commands when they're encoded into data sent to the client
+    private static final com.mojang.brigadier.Command<?> DUMMY_COMMAND;
 
     static {
         try {
@@ -126,6 +133,9 @@ final class CommodoreImpl implements Commodore {
             CUSTOM_SUGGESTIONS_FIELD = ArgumentCommandNode.class.getDeclaredField("customSuggestions");
             CUSTOM_SUGGESTIONS_FIELD.setAccessible(true);
 
+            COMMAND_EXECUTE_FUNCTION_FIELD = CommandNode.class.getDeclaredField("command");
+            COMMAND_EXECUTE_FUNCTION_FIELD.setAccessible(true);
+
             CHILDREN_FIELD = CommandNode.class.getDeclaredField("children");
             LITERALS_FIELD = CommandNode.class.getDeclaredField("literals");
             ARGUMENTS_FIELD = CommandNode.class.getDeclaredField("arguments");
@@ -133,6 +143,8 @@ final class CommodoreImpl implements Commodore {
             for (Field field : CHILDREN_FIELDS) {
                 field.setAccessible(true);
             }
+
+            DUMMY_COMMAND = (ctx) -> { throw new UnsupportedOperationException(); };
 
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
@@ -195,7 +207,7 @@ final class CommodoreImpl implements Commodore {
 
         try {
             SuggestionProvider<?> wrapper = (SuggestionProvider<?>) COMMAND_WRAPPER_CONSTRUCTOR.newInstance(this.plugin.getServer(), command);
-            setCustomSuggestionProvider(node, wrapper);
+            setRequiredHackyFieldsRecursively(node, wrapper);
         } catch (Throwable e) {
             e.printStackTrace();
         }
@@ -236,9 +248,18 @@ final class CommodoreImpl implements Commodore {
         }
     }
 
-    private static void setCustomSuggestionProvider(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
+    private static void setRequiredHackyFieldsRecursively(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
+        // set command execution function so the server sets the executable flag on the command
+        try {
+            COMMAND_EXECUTE_FUNCTION_FIELD.set(node, DUMMY_COMMAND);
+        } catch (IllegalAccessException e) {
+            e.printStackTrace();
+        }
+
         if (node instanceof ArgumentCommandNode) {
             ArgumentCommandNode<?, ?> argumentNode = (ArgumentCommandNode<?, ?>) node;
+
+            // set the custom suggestion provider field so tab completions work
             try {
                 CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
             } catch (IllegalAccessException e) {
@@ -246,9 +267,8 @@ final class CommodoreImpl implements Commodore {
             }
         }
 
-        // apply recursively to child nodes
         for (CommandNode<?> child : node.getChildren()) {
-            setCustomSuggestionProvider(child, suggestionProvider);
+            setRequiredHackyFieldsRecursively(child, suggestionProvider);
         }
     }
 
