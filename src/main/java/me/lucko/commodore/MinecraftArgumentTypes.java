@@ -27,12 +27,16 @@ package me.lucko.commodore;
 
 import com.mojang.brigadier.arguments.ArgumentType;
 
+import java.lang.reflect.Type;
 import org.bukkit.NamespacedKey;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.ParameterizedType;
 import java.util.Arrays;
+import java.util.Map;
 
 /**
  * A registry of the {@link ArgumentType}s provided by Minecraft.
@@ -46,8 +50,7 @@ public final class MinecraftArgumentTypes {
     // ArgumentRegistry#getByKey (obfuscated) method
     private static final Method ARGUMENT_REGISTRY_GET_BY_KEY_METHOD;
 
-    // ArgumentRegistry.Entry#clazz (obfuscated) field
-    private static final Field ARGUMENT_REGISTRY_ENTRY_CLASS_FIELD;
+    private static final Field BY_CLASS_MAP_FIELD;
 
     static {
         try {
@@ -71,11 +74,20 @@ public final class MinecraftArgumentTypes {
                     .findFirst().orElseThrow(NoSuchMethodException::new);
             ARGUMENT_REGISTRY_GET_BY_KEY_METHOD.setAccessible(true);
 
-            Class<?> argumentRegistryEntry = ARGUMENT_REGISTRY_GET_BY_KEY_METHOD.getReturnType();
-            ARGUMENT_REGISTRY_ENTRY_CLASS_FIELD = Arrays.stream(argumentRegistryEntry.getDeclaredFields())
-                    .filter(field -> field.getType() == Class.class)
-                    .findFirst().orElseThrow(NoSuchFieldException::new);
-            ARGUMENT_REGISTRY_ENTRY_CLASS_FIELD.setAccessible(true);
+            BY_CLASS_MAP_FIELD = Arrays.stream(argumentRegistry.getDeclaredFields())
+                    .filter(field -> Modifier.isStatic(field.getModifiers()))
+                    .filter(field -> field.getType().equals(Map.class))
+                    .filter(field -> {
+                        final ParameterizedType parameterizedType = (ParameterizedType) field.getGenericType();
+                        final Type param = parameterizedType.getActualTypeArguments()[0];
+                        if (!(param instanceof ParameterizedType)) {
+                            return false;
+                        }
+                        return ((ParameterizedType) param).getRawType().equals(Class.class);
+                    })
+                    .findFirst()
+                    .orElseThrow(NoSuchFieldException::new);
+            BY_CLASS_MAP_FIELD.setAccessible(true);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -113,8 +125,13 @@ public final class MinecraftArgumentTypes {
                 throw new IllegalArgumentException(key.toString());
             }
 
-            final Class<?> argument = (Class<?>) ARGUMENT_REGISTRY_ENTRY_CLASS_FIELD.get(entry);
-            return (Class<? extends ArgumentType<?>>) argument;
+            final Map<Class<?>, Object> map = (Map<Class<?>, Object>) BY_CLASS_MAP_FIELD.get(null);
+            for (final Map.Entry<Class<?>, Object> mapEntry : map.entrySet()) {
+                if (mapEntry.getValue() == entry) {
+                    return (Class<? extends ArgumentType<?>>) mapEntry.getKey();
+                }
+            }
+            throw new IllegalArgumentException(key.toString());
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
