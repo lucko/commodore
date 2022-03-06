@@ -64,7 +64,7 @@ LiteralCommandNode<?> timeCommand = CommodoreFileFormat.parse(plugin.getResource
 commodore.register(bukkitCommand, timeCommand);
 ```
 
-Using the `.commodore` file format is reccomended. In my opinion it is much easier to read/understand/update than the Node Builder API provided by brigadier.
+Using the `.commodore` file format is recommended. In my opinion it is much easier to read/understand/update than the Node Builder API provided by brigadier.
 
 Another example of a `.commodore` file can be found [here](https://github.com/lucko/LuckPerms/blob/master/bukkit/src/main/resources/luckperms.commodore), for the [LuckPerms](https://luckperms.net/) plugin commands. The corresponding code used to register the completions is [here](https://github.com/lucko/LuckPerms/blob/master/bukkit/src/main/java/me/lucko/luckperms/bukkit/brigadier/LuckPermsBrigadier.java).
 
