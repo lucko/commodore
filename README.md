@@ -116,7 +116,7 @@ You need to add (or merge) the following sections into your `pom.xml` file.
     <dependency>
         <groupId>me.lucko</groupId>
         <artifactId>commodore</artifactId>
-        <version>1.10</version>
+        <version>1.13</version>
         <scope>compile</scope>
     </dependency>
 </dependencies>
@@ -145,7 +145,7 @@ repositories {
 }
 
 dependencies {
-  implementation 'me.lucko:commodore:1.10'
+  implementation 'me.lucko:commodore:1.13'
 }
 
 shadowJar {
