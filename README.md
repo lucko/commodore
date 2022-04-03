@@ -1,4 +1,4 @@
-# commodore  [![Javadocs](https://javadoc.io/badge/me.lucko/commodore.svg)](https://javadoc.io/doc/me.lucko/commodore) [![Maven Central](https://maven-badges.herokuapp.com/maven-central/me.lucko/commodore/badge.svg)](https://maven-badges.herokuapp.com/maven-central/me.lucko/commodore)
+# commodore  [![Javadocs](https://javadoc.io/badge/me.lucko/commodore.svg)](https://javadoc.io/doc/me.lucko/commodore) [![Maven Central](https://img.shields.io/maven-metadata/v/https/repo1.maven.org/maven2/me/lucko/commodore/maven-metadata.xml.svg?label=maven%20central&colorB=brightgreen)](https://search.maven.org/artifact/me.lucko/commodore)
 
 commodore is a utility for using Minecraft's 1.13 [brigadier](https://github.com/Mojang/brigadier) library in Bukkit plugins. It allows you to easily register command completion data for your plugin's commands.
 
@@ -75,7 +75,7 @@ This guide assumes your plugin is built using Maven or Gradle though.
 
 #### 1) Configure your build script to shade commodore into your plugin jar
 
-<details open>
+<details>
 <summary>Maven</summary>
 
 You need to add (or merge) the following sections into your `pom.xml` file.
@@ -116,7 +116,8 @@ You need to add (or merge) the following sections into your `pom.xml` file.
     <dependency>
         <groupId>me.lucko</groupId>
         <artifactId>commodore</artifactId>
-        <version>1.10</version>
+        <!-- vvv Replace with the latest commodore version vvv -->
+        <version>{version}</version>
         <scope>compile</scope>
     </dependency>
 </dependencies>
@@ -145,7 +146,8 @@ repositories {
 }
 
 dependencies {
-  implementation 'me.lucko:commodore:1.10'
+  /* vvv Replace with the latest commodore version vvv */
+  implementation 'me.lucko:commodore:{version}'
 }
 
 shadowJar {
@@ -158,6 +160,8 @@ shadowJar {
 }
 ```
 </details>
+
+Replace `{version}` with the latest version: [![latest version](https://img.shields.io/maven-metadata/v/https/repo1.maven.org/maven2/me/lucko/commodore/maven-metadata.xml.svg?label=latest%20version&colorB=brightgreen)](https://search.maven.org/artifact/me.lucko/commodore)
 
 #### 2) Setup commodore in your plugin
 
