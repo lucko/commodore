@@ -43,9 +43,12 @@ public final class CommodoreProvider {
         try {
             Class.forName("com.mojang.brigadier.CommandDispatcher");
             CommodoreImpl.ensureSetup();
-            MinecraftArgumentTypes.ensureSetup();
             return null;
         } catch (Throwable e) {
+            if (System.getProperty("commodore.debug") != null) {
+                System.err.println("Exception while initialising commodore:");
+                e.printStackTrace(System.err);
+            }
             return e;
         }
     }

@@ -43,10 +43,7 @@ import java.nio.file.Path;
 public final class CommodoreFileFormat {
     private CommodoreFileFormat() {}
 
-    public static final CommodoreFileReader READER = CommodoreFileReader.builder()
-            .withArgumentTypeParser(BrigadierArgumentTypeParser.INSTANCE)
-            .withArgumentTypeParser(MinecraftArgumentTypeParser.INSTANCE)
-            .build();
+    public static final CommodoreFileReader READER = CommodoreFileReader.INSTANCE;
 
     /**
      * Parses a {@link LiteralCommandNode} from a commodore file.
