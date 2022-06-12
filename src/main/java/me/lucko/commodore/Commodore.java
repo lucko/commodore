@@ -29,54 +29,17 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 
-import java.util.Collection;
-import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Utility for using Minecraft's 1.13 'brigadier' library in Bukkit plugins.
  */
 public interface Commodore {
-
-    /**
-     * Gets the current command dispatcher instance.
-     *
-     * <p>CraftBukkit doesn't use the same dispatcher instance throughout
-     * the runtime of the server. The dispatcher instance is completely wiped
-     * (and replaced with a new instance) every time new plugins are loaded.</p>
-     *
-     * @return the command dispatcher
-     */
-    CommandDispatcher getDispatcher();
-
-    /**
-     * Gets the CommandSender associated with the passed CommandWrapperListener.
-     *
-     * <p>Minecraft calls brigadier command handlers with an instance of CommandWrapperListener,
-     * which cannot be accessed without accessing nms code. This method takes
-     * an Object as parameter, but the only type actually accepted is those
-     * from the S type provided by Minecraft.</p>
-     *
-     * @param commandWrapperListener the CommandWrapperListener instance from nms.
-     * @return the CommandWrapperListener wrapped as a CommandSender.
-     */
-    CommandSender getBukkitSender(Object commandWrapperListener);
-
-    /**
-     * Gets a list of all nodes registered to the {@link CommandDispatcher} by
-     * this instance.
-     *
-     * @return a list of all registered nodes.
-     */
-    List<LiteralCommandNode<?>> getRegisteredNodes();
 
     /**
      * Registers the provided argument data to the dispatcher, against all
@@ -172,34 +135,6 @@ public interface Commodore {
     default void register(LiteralArgumentBuilder<?> argumentBuilder) {
         Objects.requireNonNull(argumentBuilder, "argumentBuilder");
         register(argumentBuilder.build());
-    }
-
-    /**
-     * Gets all of the aliases known for the given command.
-     *
-     * <p>This will include the main label, as well as defined aliases, and
-     * aliases including the fallback prefix added by Bukkit.</p>
-     *
-     * @param command the command
-     * @return the aliases
-     */
-    static Collection<String> getAliases(Command command) {
-        Objects.requireNonNull(command, "command");
-
-        Stream<String> aliasesStream = Stream.concat(
-                Stream.of(command.getLabel()),
-                command.getAliases().stream()
-        );
-
-        if (command instanceof PluginCommand) {
-            String fallbackPrefix = ((PluginCommand) command).getPlugin().getName().toLowerCase().trim();
-            aliasesStream = aliasesStream.flatMap(alias -> Stream.of(
-                    alias,
-                    fallbackPrefix + ":" + alias
-            ));
-        }
-
-        return aliasesStream.distinct().collect(Collectors.toList());
     }
 
 }

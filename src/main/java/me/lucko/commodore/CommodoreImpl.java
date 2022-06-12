@@ -32,9 +32,10 @@ import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -48,7 +49,6 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,6 +56,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 final class CommodoreImpl implements Commodore {
 
@@ -64,9 +65,6 @@ final class CommodoreImpl implements Commodore {
 
     // nms.MinecraftServer#getCommandDispatcher method
     private static final Method GET_COMMAND_DISPATCHER_METHOD;
-
-    // nms.CommandListenerWrapper#getBukkitSender method
-    private static final Method GET_BUKKIT_SENDER_METHOD;
 
     // nms.CommandDispatcher#getDispatcher (obfuscated) method
     private static final Method GET_BRIGADIER_DISPATCHER_METHOD;
@@ -95,16 +93,13 @@ final class CommodoreImpl implements Commodore {
     static {
         try {
             final Class<?> minecraftServer;
-            final Class<?> commandListenerWrapper;
             final Class<?> commandDispatcher;
 
             if (ReflectionUtil.minecraftVersion() > 16) {
                 minecraftServer = ReflectionUtil.mcClass("server.MinecraftServer");
-                commandListenerWrapper = ReflectionUtil.mcClass("commands.CommandListenerWrapper");
                 commandDispatcher = ReflectionUtil.mcClass("commands.CommandDispatcher");
             } else {
                 minecraftServer = ReflectionUtil.nmsClass("MinecraftServer");
-                commandListenerWrapper = ReflectionUtil.nmsClass("CommandListenerWrapper");
                 commandDispatcher = ReflectionUtil.nmsClass("CommandDispatcher");
             }
 
@@ -117,9 +112,6 @@ final class CommodoreImpl implements Commodore {
                     .filter(method -> commandDispatcher.isAssignableFrom(method.getReturnType()))
                     .findFirst().orElseThrow(NoSuchMethodException::new);
             GET_COMMAND_DISPATCHER_METHOD.setAccessible(true);
-
-            GET_BUKKIT_SENDER_METHOD = commandListenerWrapper.getDeclaredMethod("getBukkitSender");
-            GET_BUKKIT_SENDER_METHOD.setAccessible(true);
 
             GET_BRIGADIER_DISPATCHER_METHOD = Arrays.stream(commandDispatcher.getDeclaredMethods())
                     .filter(method -> method.getParameterCount() == 0)
@@ -156,11 +148,10 @@ final class CommodoreImpl implements Commodore {
 
     CommodoreImpl(Plugin plugin) {
         this.plugin = plugin;
-        this.plugin.getServer().getPluginManager().registerEvents(new ServerReloadListener(), this.plugin);
+        this.plugin.getServer().getPluginManager().registerEvents(new ServerReloadListener(this), this.plugin);
     }
 
-    @Override
-    public CommandDispatcher<?> getDispatcher() {
+    private CommandDispatcher<?> getDispatcher() {
         try {
             Object mcServerObject = CONSOLE_FIELD.get(Bukkit.getServer());
             Object commandDispatcherObject = GET_COMMAND_DISPATCHER_METHOD.invoke(mcServerObject);
@@ -168,21 +159,6 @@ final class CommodoreImpl implements Commodore {
         } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    @Override
-    public CommandSender getBukkitSender(Object commandWrapperListener) {
-        Objects.requireNonNull(commandWrapperListener, "commandWrapperListener");
-        try {
-            return (CommandSender) GET_BUKKIT_SENDER_METHOD.invoke(commandWrapperListener);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public List<LiteralCommandNode<?>> getRegisteredNodes() {
-        return Collections.unmodifiableList(this.registeredNodes);
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -212,7 +188,7 @@ final class CommodoreImpl implements Commodore {
             e.printStackTrace();
         }
 
-        Collection<String> aliases = Commodore.getAliases(command);
+        Collection<String> aliases = getAliases(command);
         if (!aliases.contains(node.getLiteral())) {
             node = renameLiteralNode(node, command.getName());
         }
@@ -283,14 +259,20 @@ final class CommodoreImpl implements Commodore {
     /**
      * Listens for server (re)loads, and re-adds all registered nodes to the dispatcher.
      */
-    private final class ServerReloadListener implements Listener {
+    private static final class ServerReloadListener implements Listener {
+        private final CommodoreImpl commodore;
+
+        private ServerReloadListener(CommodoreImpl commodore) {
+            this.commodore = commodore;
+        }
+
         @SuppressWarnings({"rawtypes", "unchecked"})
         @EventHandler
         public void onLoad(ServerLoadEvent e) {
-            CommandDispatcher dispatcher = getDispatcher();
+            CommandDispatcher dispatcher = this.commodore.getDispatcher();
             RootCommandNode root = dispatcher.getRoot();
 
-            for (LiteralCommandNode<?> node : CommodoreImpl.this.registeredNodes) {
+            for (LiteralCommandNode<?> node : this.commodore.registeredNodes) {
                 removeChild(root, node.getName());
                 root.addChild(node);
             }
@@ -307,7 +289,7 @@ final class CommodoreImpl implements Commodore {
         private final Predicate<? super Player> permissionTest;
 
         CommandDataSendListener(Command pluginCommand, Predicate<? super Player> permissionTest) {
-            this.aliases = new HashSet<>(Commodore.getAliases(pluginCommand));
+            this.aliases = new HashSet<>(getAliases(pluginCommand));
             this.minecraftPrefixedAliases = this.aliases.stream().map(alias -> "minecraft:" + alias).collect(Collectors.toSet());
             this.permissionTest = permissionTest;
         }
@@ -323,6 +305,34 @@ final class CommodoreImpl implements Commodore {
                 e.getCommands().removeAll(this.aliases);
             }
         }
+    }
+
+    /**
+     * Gets the aliases known for the given command.
+     *
+     * <p>This will include the main label, as well as defined aliases, and
+     * aliases including the fallback prefix added by Bukkit.</p>
+     *
+     * @param command the command
+     * @return the aliases
+     */
+    private static Collection<String> getAliases(Command command) {
+        Objects.requireNonNull(command, "command");
+
+        Stream<String> aliasesStream = Stream.concat(
+                Stream.of(command.getLabel()),
+                command.getAliases().stream()
+        );
+
+        if (command instanceof PluginCommand) {
+            String fallbackPrefix = ((PluginCommand) command).getPlugin().getName().toLowerCase().trim();
+            aliasesStream = aliasesStream.flatMap(alias -> Stream.of(
+                    alias,
+                    fallbackPrefix + ":" + alias
+            ));
+        }
+
+        return aliasesStream.distinct().collect(Collectors.toList());
     }
 
     static void ensureSetup() {
