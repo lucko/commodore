@@ -28,14 +28,11 @@ package me.lucko.commodore;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
-import com.mojang.brigadier.tree.ArgumentCommandNode;
-import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
 
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -51,14 +48,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-final class CommodoreImpl implements Commodore {
+final class ReflectionCommodore extends AbstractCommodore implements Commodore {
 
     // obc.CraftServer#console field
     private static final Field CONSOLE_FIELD;
@@ -72,26 +67,12 @@ final class CommodoreImpl implements Commodore {
     // obc.command.BukkitCommandWrapper constructor
     private static final Constructor<?> COMMAND_WRAPPER_CONSTRUCTOR;
 
-    // ArgumentCommandNode#customSuggestions field
-    private static final Field CUSTOM_SUGGESTIONS_FIELD;
-
-    // CommandNode#command
-    private static final Field COMMAND_EXECUTE_FUNCTION_FIELD;
-
-    // CommandNode#children, CommandNode#literals, CommandNode#arguments fields
-    private static final Field CHILDREN_FIELD;
-    private static final Field LITERALS_FIELD;
-    private static final Field ARGUMENTS_FIELD;
-
-    // An array of the CommandNode fields above: [#children, #literals, #arguments]
-    private static final Field[] CHILDREN_FIELDS;
-
-    // Dummy instance of Command used to ensure the executable bit gets set on
-    // mock commands when they're encoded into data sent to the client
-    private static final com.mojang.brigadier.Command<?> DUMMY_COMMAND;
-
     static {
         try {
+            if (ReflectionUtil.minecraftVersion() >= 19) {
+                throw new UnsupportedOperationException("ReflectionCommodore is not supported on MC 1.19 or above. Switch to Paper :)");
+            }
+
             final Class<?> minecraftServer;
             final Class<?> commandDispatcher;
 
@@ -122,22 +103,6 @@ final class CommodoreImpl implements Commodore {
             Class<?> commandWrapperClass = ReflectionUtil.obcClass("command.BukkitCommandWrapper");
             COMMAND_WRAPPER_CONSTRUCTOR = commandWrapperClass.getConstructor(craftServer, Command.class);
 
-            CUSTOM_SUGGESTIONS_FIELD = ArgumentCommandNode.class.getDeclaredField("customSuggestions");
-            CUSTOM_SUGGESTIONS_FIELD.setAccessible(true);
-
-            COMMAND_EXECUTE_FUNCTION_FIELD = CommandNode.class.getDeclaredField("command");
-            COMMAND_EXECUTE_FUNCTION_FIELD.setAccessible(true);
-
-            CHILDREN_FIELD = CommandNode.class.getDeclaredField("children");
-            LITERALS_FIELD = CommandNode.class.getDeclaredField("literals");
-            ARGUMENTS_FIELD = CommandNode.class.getDeclaredField("arguments");
-            CHILDREN_FIELDS = new Field[]{CHILDREN_FIELD, LITERALS_FIELD, ARGUMENTS_FIELD};
-            for (Field field : CHILDREN_FIELDS) {
-                field.setAccessible(true);
-            }
-
-            DUMMY_COMMAND = (ctx) -> { throw new UnsupportedOperationException(); };
-
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -146,7 +111,7 @@ final class CommodoreImpl implements Commodore {
     private final Plugin plugin;
     private final List<LiteralCommandNode<?>> registeredNodes = new ArrayList<>();
 
-    CommodoreImpl(Plugin plugin) {
+    ReflectionCommodore(Plugin plugin) {
         this.plugin = plugin;
         this.plugin.getServer().getPluginManager().registerEvents(new ServerReloadListener(this), this.plugin);
     }
@@ -197,72 +162,20 @@ final class CommodoreImpl implements Commodore {
             if (node.getLiteral().equals(alias)) {
                 register(node);
             } else {
-                register(LiteralArgumentBuilder.literal(alias).redirect((LiteralCommandNode<Object>)node).build());
+                register(LiteralArgumentBuilder.literal(alias).redirect((LiteralCommandNode<Object>) node).build());
             }
         }
 
         this.plugin.getServer().getPluginManager().registerEvents(new CommandDataSendListener(command, permissionTest), this.plugin);
     }
 
-    @Override
-    public void register(Command command, LiteralCommandNode<?> node) {
-        Objects.requireNonNull(command, "command");
-        Objects.requireNonNull(node, "node");
-
-        register(command, node, command::testPermissionSilent);
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void removeChild(RootCommandNode root, String name) {
-        try {
-            for (Field field : CHILDREN_FIELDS) {
-                Map<String, ?> children = (Map<String, ?>) field.get(root);
-                children.remove(name);
-            }
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void setRequiredHackyFieldsRecursively(CommandNode<?> node, SuggestionProvider<?> suggestionProvider) {
-        // set command execution function so the server sets the executable flag on the command
-        try {
-            COMMAND_EXECUTE_FUNCTION_FIELD.set(node, DUMMY_COMMAND);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
-
-        if (node instanceof ArgumentCommandNode) {
-            ArgumentCommandNode<?, ?> argumentNode = (ArgumentCommandNode<?, ?>) node;
-
-            // set the custom suggestion provider field so tab completions work
-            try {
-                CUSTOM_SUGGESTIONS_FIELD.set(argumentNode, suggestionProvider);
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            }
-        }
-
-        for (CommandNode<?> child : node.getChildren()) {
-            setRequiredHackyFieldsRecursively(child, suggestionProvider);
-        }
-    }
-
-    private static <S> LiteralCommandNode<S> renameLiteralNode(LiteralCommandNode<S> node, String newLiteral) {
-        LiteralCommandNode<S> clone = new LiteralCommandNode<>(newLiteral, node.getCommand(), node.getRequirement(), node.getRedirect(), node.getRedirectModifier(), node.isFork());
-        for (CommandNode<S> child : node.getChildren()) {
-            clone.addChild(child);
-        }
-        return clone;
-    }
-
     /**
      * Listens for server (re)loads, and re-adds all registered nodes to the dispatcher.
      */
     private static final class ServerReloadListener implements Listener {
-        private final CommodoreImpl commodore;
+        private final ReflectionCommodore commodore;
 
-        private ServerReloadListener(CommodoreImpl commodore) {
+        private ServerReloadListener(ReflectionCommodore commodore) {
             this.commodore = commodore;
         }
 
@@ -305,34 +218,6 @@ final class CommodoreImpl implements Commodore {
                 e.getCommands().removeAll(this.aliases);
             }
         }
-    }
-
-    /**
-     * Gets the aliases known for the given command.
-     *
-     * <p>This will include the main label, as well as defined aliases, and
-     * aliases including the fallback prefix added by Bukkit.</p>
-     *
-     * @param command the command
-     * @return the aliases
-     */
-    private static Collection<String> getAliases(Command command) {
-        Objects.requireNonNull(command, "command");
-
-        Stream<String> aliasesStream = Stream.concat(
-                Stream.of(command.getLabel()),
-                command.getAliases().stream()
-        );
-
-        if (command instanceof PluginCommand) {
-            String fallbackPrefix = ((PluginCommand) command).getPlugin().getName().toLowerCase().trim();
-            aliasesStream = aliasesStream.flatMap(alias -> Stream.of(
-                    alias,
-                    fallbackPrefix + ":" + alias
-            ));
-        }
-
-        return aliasesStream.distinct().collect(Collectors.toList());
     }
 
     static void ensureSetup() {

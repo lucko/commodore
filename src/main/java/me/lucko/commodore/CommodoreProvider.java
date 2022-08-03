@@ -28,6 +28,7 @@ package me.lucko.commodore;
 import org.bukkit.plugin.Plugin;
 
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Factory for obtaining instances of {@link Commodore}.
@@ -37,19 +38,39 @@ public final class CommodoreProvider {
         throw new AssertionError();
     }
 
-    private static final Throwable SETUP_EXCEPTION = checkSupported();
+    private static final Function<Plugin, Commodore> PROVIDER = checkSupported();
 
-    private static Throwable checkSupported() {
+    private static Function<Plugin, Commodore> checkSupported() {
         try {
             Class.forName("com.mojang.brigadier.CommandDispatcher");
-            CommodoreImpl.ensureSetup();
-            return null;
         } catch (Throwable e) {
-            if (System.getProperty("commodore.debug") != null) {
-                System.err.println("Exception while initialising commodore:");
-                e.printStackTrace(System.err);
-            }
-            return e;
+            printDebugInfo(e);
+            return null;
+        }
+
+        // try the paper impl
+        try {
+            PaperCommodore.ensureSetup();
+            return PaperCommodore::new;
+        } catch (Throwable e) {
+            printDebugInfo(e);
+        }
+
+        // try reflection impl
+        try {
+            ReflectionCommodore.ensureSetup();
+            return ReflectionCommodore::new;
+        } catch (Throwable e) {
+            printDebugInfo(e);
+        }
+
+        return null;
+    }
+
+    private static void printDebugInfo(Throwable e) {
+        if (System.getProperty("commodore.debug") != null) {
+            System.err.println("Exception while initialising commodore:");
+            e.printStackTrace(System.err);
         }
     }
 
@@ -59,7 +80,7 @@ public final class CommodoreProvider {
      * @return true if commodore is supported.
      */
     public static boolean isSupported() {
-        return SETUP_EXCEPTION == null;
+        return PROVIDER != null;
     }
 
     /**
@@ -72,9 +93,12 @@ public final class CommodoreProvider {
      */
     public static Commodore getCommodore(Plugin plugin) throws BrigadierUnsupportedException {
         Objects.requireNonNull(plugin, "plugin");
-        if (SETUP_EXCEPTION != null) {
-            throw new BrigadierUnsupportedException("Brigadier is not supported by the server.", SETUP_EXCEPTION);
+        if (PROVIDER == null) {
+            throw new BrigadierUnsupportedException(
+                    "Brigadier is not supported by the server. " +
+                    "Set -Dcommodore.debug=true for debug info."
+            );
         }
-        return new CommodoreImpl(plugin);
+        return PROVIDER.apply(plugin);
     }
 }

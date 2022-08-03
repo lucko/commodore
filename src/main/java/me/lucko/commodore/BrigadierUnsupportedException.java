@@ -30,7 +30,7 @@ package me.lucko.commodore;
  */
 public final class BrigadierUnsupportedException extends UnsupportedOperationException {
 
-    public BrigadierUnsupportedException(String message, Throwable cause) {
-        super(message, cause);
+    BrigadierUnsupportedException(String message) {
+        super(message);
     }
 }

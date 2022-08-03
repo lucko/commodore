@@ -91,7 +91,11 @@ public interface Commodore {
      * @param command the command to read aliases from
      * @param node the argument data
      */
-    void register(Command command, LiteralCommandNode<?> node);
+    default void register(Command command, LiteralCommandNode<?> node) {
+        Objects.requireNonNull(command, "command");
+        Objects.requireNonNull(node, "node");
+        register(command, node, command::testPermissionSilent);
+    }
 
     /**
      * Registers the provided argument data to the dispatcher, against all
