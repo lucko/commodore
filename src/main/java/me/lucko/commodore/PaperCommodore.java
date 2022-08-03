@@ -72,7 +72,7 @@ final class PaperCommodore extends AbstractCommodore implements Commodore, Liste
         Objects.requireNonNull(permissionTest, "permissionTest");
 
         try {
-            setRequiredHackyFieldsRecursively(node, null);
+            setRequiredHackyFieldsRecursively(node, DUMMY_SUGGESTION_PROVIDER);
         } catch (Throwable e) {
             e.printStackTrace();
         }

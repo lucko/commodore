@@ -60,6 +60,7 @@ abstract class AbstractCommodore implements Commodore {
     // Dummy instance of Command used to ensure the executable bit gets set on
     // mock commands when they're encoded into data sent to the client
     protected static final com.mojang.brigadier.Command<?> DUMMY_COMMAND;
+    protected static final SuggestionProvider<?> DUMMY_SUGGESTION_PROVIDER;
 
     static {
         try {
@@ -77,7 +78,13 @@ abstract class AbstractCommodore implements Commodore {
                 field.setAccessible(true);
             }
 
+            // should never be called
+            // if ReflectionCommodore: bukkit handling should override
+            // if PaperCommodore: this is only sent to the client, not used for actual command handling
             DUMMY_COMMAND = (ctx) -> { throw new UnsupportedOperationException(); };
+            // should never be called - only used in clientbound root node, and the server impl will pass anything through
+            // SuggestionProviders#safelySwap (swap it for the ASK_SERVER provider) before sending
+            DUMMY_SUGGESTION_PROVIDER = (context, builder) -> { throw new UnsupportedOperationException(); };
 
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
